@@ -37,7 +37,7 @@ const opts = {
   layout: store.get('layout', '2x3', LAYOUTS), film: store.get('film', 'bw', FILMS),
   lyric: store.get('lyric', 'serif', LYRIC_STYLES), surface: store.get('surface', 'wood', SURFACES),
   mode: store.get('mode', 'pose', MODES), timer: store.get('timer', '5', TIMERS),
-  frame: store.get('frame', 'white'), custom: store.get('custom', '#e8d8c3'), pack: store.get('pack', 'christmas', PACKS),
+  frame: store.get('frame', 'white'), custom: store.get('custom', '#e8d8c3'), pack: store.get('pack', 'none', PACKS),
   seed: 1, showDate: store.get('showDate', '1') === '1', showCaptions: store.get('showCaptions', '1') === '1',
   flash: store.get('flash', 'on') === 'on',
 };
@@ -927,7 +927,8 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 
 $('#dl-strip').addEventListener('click', async () => { if (!R.strip) return; downloadBlob(await stripPng(), `${fileBase()}.png`); toast('Strip saved'); });
 $('#dl-gif').addEventListener('click', makeGif);
-$('#open-video').addEventListener('click', openVideo);
+// big red Download video: saves it if made, otherwise opens the video card to make it
+$('#open-video').addEventListener('click', () => { if (R.videoBlob) { downloadBlob(R.videoBlob, `${fileBase()}.${R.videoExt}`); toast('Video saved'); } else openVideo(); });
 $('#close-video').addEventListener('click', closeVideo);
 $('#make-video').addEventListener('click', makeVideo);
 $('#redo-video').addEventListener('click', () => videoStep('setup'));

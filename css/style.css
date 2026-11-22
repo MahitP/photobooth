@@ -239,6 +239,8 @@ h1 .sub { display: block; font: italic 400 clamp(20px, 2.2vw, 26px)/1.3 var(--se
 
 .save { display: grid; gap: 10px; padding: 16px; border: 1px solid var(--line); border-radius: 18px; background: #fffaf2; box-shadow: 0 10px 30px -22px rgba(60,20,10,.5); }
 .btn.wide { width: 100%; }
+.save-main { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.save-main .btn { padding: 14px 10px; }
 .save-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .save-row .btn { padding: 11px 8px; font-size: 15px; }
 .btn.busy { pointer-events: none; background: linear-gradient(90deg, rgba(157,28,36,.16) calc(var(--p, 0) * 100%), transparent 0); }
@@ -315,3 +317,8 @@ h1 .sub { display: block; font: italic 400 clamp(20px, 2.2vw, 26px)/1.3 var(--se
   .sheet { transform: none; }
   .chips .pill { transition: none; }
 }
+
+/* keep wide rows (the swipeable sticker packs) from stretching the panel on phones */
+.studio, .studio > *, .tab-area, .panel { min-width: 0; }
+.save-main .btn { min-width: 0; white-space: nowrap; }
+@media (max-width: 400px) { .save-main .btn { font-size: 16px; padding: 13px 6px; } }
