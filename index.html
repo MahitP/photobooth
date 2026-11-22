@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Hold it. · Last Christmas</title>
+  <meta name="description" content="Hold it. A photobooth that takes the picture when you hold the pose. Last Christmas edition.">
+  <meta name="theme-color" content="#f3ece1">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/icon-180.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:wght@600&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,400;1,500&family=Courier+Prime&family=Homemade+Apple&family=Libre+Caslon+Text&family=Pinyon+Script&family=TikTok+Sans:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- HOME -->
+<main id="home" class="screen active">
+  <section class="home-copy">
+    <p class="brand">hold it.</p>
+    <h1><span class="script">Last Christmas</span><span class="sub">Hold the pose. We'll take it from here.</span></h1>
+    <ol class="steps">
+      <li><b>Pick a strip.</b> Four or six frames, one pose per lyric.</li>
+      <li><b>Match the cut-out.</b> Line your body up with the outline and the camera fires on its own.</li>
+      <li><b>Keep both.</b> The printed strip, and a video of it set to the song.</li>
+    </ol>
+
+    <fieldset class="opt">
+      <legend>Layout</legend>
+      <div class="layouts" role="radiogroup" aria-label="Layout">
+        <button type="button" role="radio" data-layout="1x4" aria-checked="false"><i class="ico l14"><s></s><s></s><s></s><s></s></i><span>1 × 4 strip</span><small>4 poses</small></button>
+        <button type="button" role="radio" data-layout="2x2" aria-checked="false"><i class="ico l22"><s></s><s></s><s></s><s></s></i><span>2 × 2 box</span><small>4 poses</small></button>
+        <button type="button" role="radio" data-layout="2x3" aria-checked="true"><i class="ico l23"><s></s><s></s><s></s><s></s><s></s><s></s></i><span>2 × 3 sheet</span><small>6 poses</small></button>
+      </div>
+    </fieldset>
+    <div class="opt-row">
+      <fieldset class="opt"><legend>Film</legend><div class="chips" data-group="film"></div></fieldset>
+      <fieldset class="opt"><legend>Frame</legend><div class="chips" data-group="theme"></div></fieldset>
+    </div>
+
+    <div class="cta">
+      <button id="start" class="btn primary">Step into the booth</button>
+      <p class="fine">Camera stays on your device. Nothing is uploaded.</p>
+    </div>
+  </section>
+  <aside class="home-preview" aria-label="Strip preview">
+    <div class="preview-surface"><img id="preview" alt="Preview of the chosen strip"></div>
+  </aside>
+</main>
+
+<!-- BOOTH -->
+<section id="booth" class="screen" aria-label="Photobooth">
+  <video id="cam" playsinline muted></video>
+  <canvas id="overlay"></canvas>
+  <div class="booth-top">
+    <p class="wordmark">last christmas</p>
+    <div class="booth-btns">
+      <button id="flash-btn" class="icon-btn" aria-label="Screen flash" aria-pressed="false" title="Screen flash lights your face for each shot">
+        <svg viewBox="0 0 24 24"><path d="M13 2 5 14h6l-1 8 8-12h-6z"/><path class="slash" d="M4 4l16 16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      </button>
+      <button id="flip" class="icon-btn" aria-label="Switch camera" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-2h6l2 2h3v11H4z"/><path d="M9.5 13.5a2.8 2.8 0 0 1 5-1.6M14.5 12.5v-1.8h-1.8M14.5 14.5a2.8 2.8 0 0 1-5 1.6M9.5 15.5v1.8h1.8"/></svg>
+      </button>
+      <button id="fullscreen" class="icon-btn" aria-label="Full screen">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+      </button>
+      <button id="mute" class="icon-btn" aria-label="Mute music" aria-pressed="false">
+        <svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path class="wave" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      </button>
+      <button id="exit" class="icon-btn" aria-label="Leave the booth"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
+    </div>
+  </div>
+
+  <div id="loading" class="loading"><span class="dot"></span><p>warming up the booth…</p><button id="loading-back" class="link light">Go back</button></div>
+  <div id="countdown" class="countdown" aria-live="assertive"></div>
+  <div id="flash" class="flash"></div>
+  <div id="print" class="print"><img alt=""><span></span></div>
+
+  <div class="booth-bottom">
+    <p id="meta" class="meta"></p>
+    <p id="instruction" class="instruction" aria-live="polite"></p>
+    <p id="hint" class="hint" aria-live="polite"></p>
+    <div class="snap-row">
+      <button id="undo" class="btn ghost small" hidden>Redo last <kbd>⌫</kbd></button>
+      <button id="snap" class="btn ghost small">Snap now <kbd>space</kbd></button>
+    </div>
+    <ol id="tray" class="tray"></ol>
+  </div>
+</section>
+
+<!-- RESULT -->
+<section id="result" class="screen" aria-label="Your strip">
+  <div class="result-stage">
+    <div class="slot"><span></span></div>
+    <div class="developing"><img id="strip-img" alt="Your photo strip. Select a photo to retake it." title="Tap a photo to retake it"></div>
+  </div>
+  <div class="result-panel">
+    <p class="brand">hold it.</p>
+    <h2 class="script">ta-da!</h2>
+    <p class="lede">Strike it. Keep it. Tap any photo to retake just that one.</p>
+
+    <div class="actions">
+      <button id="dl-strip" class="btn primary">Download strip</button>
+      <button id="share-strip" class="btn">Share</button>
+      <button id="make-video" class="btn">Make the video</button>
+    </div>
+    <div class="more">
+      <button id="dl-story" class="link">Story image (9:16)</button>
+      <button id="dl-print" class="link" hidden>4×6 print with two strips</button>
+    </div>
+
+    <div class="restyle">
+      <fieldset class="opt"><legend>Film</legend><div class="chips" data-group="film"></div></fieldset>
+      <fieldset class="opt"><legend>Frame</legend><div class="chips" data-group="theme"></div></fieldset>
+      <label class="opt note"><span>Note on the strip</span><input id="note" maxlength="24" placeholder="names, place, inside joke" autocomplete="off"></label>
+      <div class="opt"><span class="legend">Retake one</span><div id="retake-chips" class="chips num"></div></div>
+    </div>
+
+    <div class="video-opts">
+      <fieldset class="opt"><legend>Lyrics</legend><div class="chips" data-group="lyric"></div></fieldset>
+      <fieldset class="opt"><legend>Surface</legend><div class="chips" data-group="surface"></div></fieldset>
+    </div>
+
+    <div id="video-box" class="video-box" hidden>
+      <div class="progress"><i></i></div>
+      <p class="progress-label">filming your strip…</p>
+      <video id="video-out" playsinline controls loop hidden></video>
+      <div id="video-actions" class="actions" hidden>
+        <button id="dl-video" class="btn primary">Download video</button>
+        <button id="share-video" class="btn">Share</button>
+        <button id="copy-caption" class="link">Copy a caption</button>
+      </div>
+    </div>
+    <p id="audio-note" class="fine" hidden></p>
+
+    <div class="secondary">
+      <button id="retake" class="link">Retake all</button>
+      <button id="home-btn" class="link">Change layout</button>
+    </div>
+  </div>
+</section>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

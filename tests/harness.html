@@ -1,0 +1,40 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>render harness</title>
+<link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:wght@600&family=Courier+Prime&family=Homemade+Apple&family=Libre+Caslon+Text&family=Pinyon+Script&family=TikTok+Sans:wght@500;700&display=swap" rel="stylesheet">
+<style>body{margin:0;background:#222;color:#eee;font:14px monospace} #out{display:flex;flex-wrap:wrap;gap:8px;padding:8px;align-items:flex-start} img{display:block} figure{margin:0} figcaption{padding:2px}</style>
+</head><body><div id="out"></div><pre id="log"></pre>
+<script type="module">
+// Dev-only: renders the strip and sample video frames from fixture photos. ?layout=2x3&film=bw&theme=merry&surface=wood&lyric=serif&t=0.5,3,8
+import { developPhoto, smartCrop, canvas } from '../js/film.js';
+import { renderStrip, cellRects, cellAspect, LAYOUTS } from '../js/strip.js';
+import { SONGS, beatsFor } from '../js/songs.js';
+import { createRenderer } from '../js/video.js';
+const q = new URLSearchParams(location.search);
+const layout = q.get('layout') || '2x3', film = q.get('film') || 'bw', theme = q.get('theme') || 'merry';
+const log = (s) => (document.getElementById('log').textContent += s + '\n');
+const add = (c, label, w) => { const f = document.createElement('figure'); const i = new Image(); i.src = c.toDataURL('image/jpeg', 0.85); i.style.width = w + 'px'; f.append(i); f.insertAdjacentHTML('beforeend', `<figcaption>${label}</figcaption>`); document.getElementById('out').append(f); };
+try {
+  await Promise.all(['40px "Pinyon Script"', '20px "Homemade Apple"', '12px "Courier Prime"', '600 20px "Bodoni Moda"', '40px "Libre Caslon Text"', '700 40px "TikTok Sans"'].map((f) => document.fonts.load(f)));
+  const song = SONGS['last-christmas'];
+  const { beats, end } = beatsFor(song, LAYOUTS[layout].count);
+  const DPI = 600, rects = cellRects(layout, DPI), aspect = cellAspect(layout);
+  const t0 = performance.now();
+  const dev = [];
+  for (let i = 0; i < beats.length; i++) {
+    const im = new Image(); im.src = `fixtures/p${i}.jpg`; await im.decode();
+    const raw = canvas(im.width, im.height); raw.getContext('2d').drawImage(im, 0, 0);
+    const face = { x0: 0.36 * im.width, x1: 0.62 * im.width, y0: 0.1 * im.height, y1: 0.62 * im.height };
+    const crop = smartCrop(raw.width, raw.height, { ...face, faceY: 0.4 * im.height }, aspect);
+    dev.push({ img: developPhoto(raw, crop, rects[i].w, rects[i].h, film, 101 + i), face: { x0: (face.x0 - crop.x) / crop.w, x1: (face.x1 - crop.x) / crop.w, y0: (face.y0 - crop.y) / crop.h, y1: (face.y1 - crop.y) / crop.h } });
+  }
+  const strip = renderStrip({ layoutId: layout, themeId: theme, photos: dev.map((d) => d.img), captions: beats.map((b) => b.caption), dpi: DPI });
+  log(`develop+strip ${Math.round(performance.now() - t0)}ms  strip ${strip.width}x${strip.height}`);
+  add(strip, `strip ${layout} ${film} ${theme}`, 520);
+  const r = createRenderer({ strip, rects, faces: dev.map((d) => d.face), beats, end, theme, surface: q.get('surface') || 'wood', lyricStyle: q.get('lyric') || 'serif' });
+  log(`renderer ready ${Math.round(performance.now() - t0)}ms, duration ${r.duration.toFixed(2)}s`);
+  const times = (q.get('t') || '0.6,2.5,5.6,11.5,15,20.4').split(',').map(Number);
+  for (const t of times) { const t1 = performance.now(); const c = r.frame(t); log(`frame t=${t} ${Math.round(performance.now() - t1)}ms`); add(c, `t=${t}`, 300); }
+  const t2 = performance.now(); for (let k = 0; k < 30; k++) r.frame(1 + k / 30); log(`30 frames avg ${Math.round((performance.now() - t2) / 30)}ms`);
+  document.title = 'done';
+} catch (e) { log('ERROR ' + e.stack); document.title = 'error'; }
+</script></body></html>
