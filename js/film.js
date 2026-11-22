@@ -2,11 +2,14 @@
 // Seeded randomness so the print and the video render identical photos.
 
 export const FILMS = {
-  bw:    { label: 'B&W' },
-  sepia: { label: 'Sepia' },
-  color: { label: 'Color' },
+  bw:     { label: 'B&W' },
+  noir:   { label: 'Noir' },
+  sepia:  { label: 'Sepia' },
+  color:  { label: 'Color' },
+  vivid:  { label: 'Vivid' },
   golden: { label: 'Golden' },
-  cool:  { label: 'Cool' },
+  cool:   { label: 'Cool' },
+  soft:   { label: 'Soft' },
 };
 
 // Colour films: per-channel gain, saturation, black lift. Golden/Cool mirror the Life4Cuts filter menu.
@@ -14,6 +17,8 @@ const COLOR = {
   color:  { gain: [1.04, 1, 0.94], sat: 0.88, lift: [0.05, 0.045, 0.06] },
   golden: { gain: [1.1, 1.02, 0.84], sat: 0.95, lift: [0.07, 0.055, 0.04] },
   cool:   { gain: [0.95, 1.0, 1.08], sat: 0.8, lift: [0.045, 0.05, 0.07] },
+  vivid:  { gain: [1.05, 1.02, 0.98], sat: 1.2, lift: [0.02, 0.02, 0.025] },
+  soft:   { gain: [1.03, 1.01, 0.98], sat: 0.7, lift: [0.1, 0.095, 0.1] },
 };
 export const isColor = (film) => film in COLOR;
 
@@ -24,6 +29,9 @@ export const FILM_CSS = {
   color: 'saturate(0.92) contrast(1.06) brightness(1.03)',
   golden: 'sepia(0.28) saturate(1.15) contrast(1.05) brightness(1.06)',
   cool: 'saturate(0.8) contrast(1.05) brightness(1.07) hue-rotate(6deg)',
+  noir: 'grayscale(1) contrast(1.45) brightness(0.98)',
+  vivid: 'saturate(1.3) contrast(1.1) brightness(1.03)',
+  soft: 'saturate(0.75) contrast(0.88) brightness(1.08)',
 };
 
 export function rng(seed) {
@@ -110,6 +118,7 @@ export function developPhoto(src, crop, w, h, film, seed = 1) {
         // orthochromatic-ish mix: lighter skin, darker reds like old booth paper
         let l = (0.42 * r + 0.48 * gg + 0.1 * b) * vig;
         l = curve(l, 0.035, 0.02);
+        if (film === 'noir') l = curve(l * 0.97, 0.01, 0.0); // second S-curve: inky blacks, hot highlights
         const mw = 4 * l * (1 - l) + 0.15;
         const v = l * 255 + g * mw;
         if (film === 'sepia') {

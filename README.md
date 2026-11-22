@@ -16,17 +16,43 @@ Render harness (dev): put any six photos in `tests/fixtures/p0.jpg … p5.jpg`, 
 
 ## Features
 
-- **Pose-triggered shots:** hold the pose and a 3-2-1 countdown fires the shot. Space snaps manually, and Backspace redoes the last shot.
-- **Duo mode:** up to two people (two faces, four hands). Each hand belongs to the nearest face, and either person can trigger the pose.
-- **Screen flash:** the screen goes white for a moment before each shot to light your face, like a selfie flash. You can turn it off in the booth.
-- **Low-light hint, plus auto-levels** on every photo, so dim rooms still print bright.
-- **Films:** B&W, Sepia, Color, Golden, Cool. **Frames:** Classic, Merry, Midnight.
-- **Restyle after shooting:** change the film, the frame, or the note on the strip without retaking.
-- **Retake one photo:** tap it on the strip or use the number buttons. The other photos are kept.
-- **Downloads:** the strip as a 600 dpi PNG (450 dpi on phones), a 9:16 story image, a 4×6 print sheet with two strips for the 1×4, and the MP4 video (about 8 Mbps).
-- **Share:** opens the system share sheet with the file where the browser supports it (phones, Safari), and downloads otherwise.
-- **Booth extras:** countdown ticks and a vibration on capture, the screen stays awake, full screen, a camera switch when there's more than one camera (a rear camera isn't mirrored).
-- **Installable app:** a manifest and icon, plus a service worker that caches the pose models, WASM and fonts, so repeat visits load almost instantly and work offline.
+**Shooting**
+- **Two ways to shoot:** *Pose* (hands-free: hold the pose and a 3-2-1 countdown fires) or *Timer* (3, 5 or 10 s per photo, the pose guide still shows what to do). Space snaps manually, Backspace redoes the last shot.
+- **Song cues:** each pose plays just its own lyric, then waits while you pose.
+- **Camera roll:** skip the camera and build the strip from your own photos.
+- **Duo mode:** up to two people. Each hand belongs to the nearest face, and either person can trigger the pose.
+- **Screen flash, low-light hint, auto-levels:** dim rooms still print bright.
+- **Booth extras:** countdown ticks, vibration on capture, screen stays awake, full screen, camera switch (rear cameras aren't mirrored).
+
+**The studio (after shooting)**
+- **Frame:** White, Black, Pink, Green, Blue, Yellow, Purple, Maroon, Burgundy, or any custom colour. Text colour follows the paper.
+- **Stickers:** None, Christmas, Girlypop, Cute, Winter (original art, die-cut look), with Shuffle.
+- **Film:** B&W, Noir, Sepia, Color, Vivid, Golden, Cool, Soft.
+- **Text:** a note in the footer, and switches for the date and the lyric captions.
+- **Retake one photo:** hover or tap it on the strip. The other photos are kept.
+
+**Keeping it**
+- **Download strip:** 600 dpi PNG (450 dpi on phones).
+- **Live GIF:** every photo plays the second before the shutter, inside the real strip. Uploaded photos get a flipbook GIF.
+- **Video:** the filmed-strip MP4 with the song and lyrics. The download button appears once the video is made.
+- **Send to phone (QR):** uploads a private copy of the strip, GIF or video and shows a QR code; the phone gets a page with a Save button. Links delete themselves after 24 hours. This is the only thing that ever leaves the device, and only when you tap it.
+- **More:** share sheet (phones, Safari), a 9:16 story image, a 4×6 print sheet with two strips (1×4 layout).
+- **Installable app:** manifest, icon and a service worker that caches the models and fonts for fast repeat visits.
+
+## Share links (Cloudflare)
+
+`share-worker/` is a Cloudflare Worker at `https://holdit-share.mahitp-16.workers.dev`, storing files in Workers KV
+(`holdit-share-files`) with a 24-hour expiry.
+
+- `POST /upload`: accepts PNG, JPEG, GIF, MP4 or WebM up to 24 MB, only from photobooth.mahit.dev and localhost.
+- `GET /f/<id>.<ext>`: the phone page (preview + Save). `GET /raw/<id>`: the file itself.
+- Free-plan limits: 1,000 uploads a day, 1 GB stored (files expire daily, so storage stays small).
+
+Redeploy after changing it:
+
+```bash
+cd share-worker && npm install && npx cf deploy
+```
 
 ## How it works
 

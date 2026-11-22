@@ -8,11 +8,27 @@ export const LAYOUTS = {
   '2x3': { label: '2 × 3 sheet', count: 6, w: 4, h: 6, cols: 2, rows: 3, cellW: 1.8, cellH: 1.42, side: 0.15, top: 0.15, gapX: 0.1, gapY: 0.04, caption: 0.22 },
 };
 
-export const THEMES = {
-  classic:  { label: 'Classic',  paper: '#f4f0e7', ink: '#2b2622', accent: '#2b2622', dark: false },
-  merry:    { label: 'Merry',    paper: '#f6ede0', ink: '#3a2420', accent: '#a3202a', dark: false },
-  midnight: { label: 'Midnight', paper: '#151413', ink: '#ece5d8', accent: '#ece5d8', dark: true },
+// Frame (paper) colours. Pastels are tuned to look like real coloured booth stock, not screen colours.
+export const FRAMES = {
+  white:    { label: 'White',    hex: '#f6f2ea' },
+  black:    { label: 'Black',    hex: '#161514' },
+  pink:     { label: 'Pink',     hex: '#f5cdd6' },
+  green:    { label: 'Green',    hex: '#cfe2c9' },
+  blue:     { label: 'Blue',     hex: '#cadcf2' },
+  yellow:   { label: 'Yellow',   hex: '#f6e7a6' },
+  purple:   { label: 'Purple',   hex: '#dcd0f2' },
+  maroon:   { label: 'Maroon',   hex: '#6e1f2b' },
+  burgundy: { label: 'Burgundy', hex: '#4b1622' },
 };
+
+// Text colours follow the paper: dark ink + red script on light paper, cream on dark paper.
+export function frameTheme(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  const lum = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  const dark = lum < 0.5;
+  return { paper: hex, dark, black: lum < 0.12, ink: dark ? '#f2ece2' : '#2b2622', accent: dark ? '#f2ece2' : '#a3202a', blank: dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.12)' };
+}
 
 // Cell rectangles in px for a layout at dpi (reading order).
 export function cellRects(layoutId, dpi) {
@@ -27,14 +43,18 @@ export function cellRects(layoutId, dpi) {
   }
   return rects;
 }
-
+export function footerTop(layoutId, dpi) {
+  const L = LAYOUTS[layoutId], last = cellRects(layoutId, dpi).at(-1);
+  return last.y + last.h + L.caption * dpi;
+}
+export const stripSize = (layoutId, dpi) => ({ W: Math.round(LAYOUTS[layoutId].w * dpi), H: Math.round(LAYOUTS[layoutId].h * dpi) });
 export const cellAspect = (layoutId) => LAYOUTS[layoutId].cellW / LAYOUTS[layoutId].cellH;
 
-// photos: processed canvases (any size, already cell-aspect). captions: strings. Returns a canvas.
-// note: optional custom line (names, place) printed in the footer instead of the site name.
-export function renderStrip({ layoutId, themeId, photos, captions = [], note = '', date = new Date(), dpi = 300, seed = 3 }) {
-  const L = LAYOUTS[layoutId], T = THEMES[themeId];
-  const W = Math.round(L.w * dpi), H = Math.round(L.h * dpi);
+// photos: processed canvases (cell aspect) or null for an empty cell. captions: strings (or [] for none).
+// note: custom footer line. showDate: print the date. stickers: transparent overlay canvas (drawn on top).
+export function renderStrip({ layoutId, frame = FRAMES.white.hex, photos, captions = [], note = '', showDate = true, stickers = null, date = new Date(), dpi = 300, seed = 3 }) {
+  const L = LAYOUTS[layoutId], T = frameTheme(frame);
+  const { W, H } = stripSize(layoutId, dpi);
   const c = canvas(W, H);
   const ctx = c.getContext('2d');
   const rand = rng(seed);
@@ -57,7 +77,7 @@ export function renderStrip({ layoutId, themeId, photos, captions = [], note = '
     roundRect(ctx, r.x, r.y, r.w, r.h, rad);
     ctx.clip();
     if (img) ctx.drawImage(img, r.x, r.y, r.w, r.h);
-    else { ctx.fillStyle = T.dark ? '#262422' : '#d9d3c8'; ctx.fillRect(r.x, r.y, r.w, r.h); }
+    else { ctx.fillStyle = T.blank; ctx.fillRect(r.x, r.y, r.w, r.h); }
     // emulsion edge: slight darkening just inside the photo border
     const e = 5 * u;
     for (const [x0, y0, x1, y1] of [[r.x, 0, r.x + e, 0], [r.x + r.w, 0, r.x + r.w - e, 0], [0, r.y, 0, r.y + e], [0, r.y + r.h, 0, r.y + r.h - e]]) {
@@ -86,7 +106,7 @@ export function renderStrip({ layoutId, themeId, photos, captions = [], note = '
     }
   });
 
-  drawFooter(ctx, L, T, W, H, dpi, u, date, themeId, rects, (note.trim() || 'hold it.').toUpperCase());
+  drawFooter(ctx, L, T, W, H, dpi, u, showDate ? date : null, footerTop(layoutId, dpi), (note.trim() || 'hold it.').toUpperCase());
 
   // paper texture over everything (also lightly over photos, like real prints)
   const tex = paperTexture(Math.round(W / 2), Math.round(H / 2), T.dark, seed + 11);
@@ -100,44 +120,40 @@ export function renderStrip({ layoutId, themeId, photos, captions = [], note = '
   eg.addColorStop(0, 'rgba(0,0,0,0)'); eg.addColorStop(1, T.dark ? 'rgba(0,0,0,0.25)' : 'rgba(80,60,30,0.07)');
   ctx.fillStyle = eg;
   ctx.fillRect(0, 0, W, H);
+  // stickers sit on top of the paper, like real ones
+  if (stickers) ctx.drawImage(stickers, 0, 0, W, H);
   return c;
 }
 
-function drawFooter(ctx, L, T, W, H, dpi, u, date, themeId, rects, tag) {
-  const last = rects[rects.length - 1];
-  const top = last.y + last.h + L.caption * dpi;
+function drawFooter(ctx, L, T, W, H, dpi, u, date, top, tag) {
   const fh = H - top;
   const cx = W / 2;
-  const scale = Math.min(1, L.w / 4) ; // 1x4 strip is half as wide
-  const dateStr = date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase();
+  const scale = Math.min(1, L.w / 4); // 1x4 strip is half as wide
+  const dateStr = date ? date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase() : '';
+  const meta = date ? `${dateStr}  ·  ${tag}` : tag;
   ctx.save();
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  if (themeId === 'midnight') {
+  if (T.black) {
+    // near-black stock gets the Photoism-style serif caps
     ctx.fillStyle = T.ink;
     ctx.font = `600 ${18 * u * (0.6 + scale * 0.4)}px "Bodoni Moda", serif`;
     ctx.letterSpacing = `${2 * u}px`;
     ctx.fillText('LAST CHRISTMAS', cx, top + fh * 0.42);
     ctx.font = `${7 * u}px "Courier Prime", monospace`;
     ctx.globalAlpha = 0.7;
-    ctx.fillText(`${dateStr}  ·  ${tag}`, cx, top + fh * 0.72);
+    ctx.fillText(meta, cx, top + fh * 0.72);
   } else {
     ctx.fillStyle = T.accent;
     let big = (L.w < 3 ? 30 : 40) * u;
     ctx.font = `${big}px "Pinyon Script", cursive`;
-    // text + holly + bow (~2.4 font-sizes of ornaments) must fit inside the paper with a margin
-    const need = ctx.measureText('Last Christmas').width + (themeId === 'merry' ? big * 2.4 : 0);
-    if (need > W * 0.9) { big *= (W * 0.9) / need; ctx.font = `${big}px "Pinyon Script", cursive`; }
+    const need = ctx.measureText('Last Christmas').width;
+    if (need > W * 0.86) { big *= (W * 0.86) / need; ctx.font = `${big}px "Pinyon Script", cursive`; }
     ctx.fillText('Last Christmas', cx, top + fh * 0.42);
-    if (themeId === 'merry') {
-      const half = ctx.measureText('Last Christmas').width / 2;
-      drawBow(ctx, cx + half + big * 0.5, top + fh * 0.36, big * 0.36, T.accent);
-      drawHolly(ctx, cx - half - big * 0.62, top + fh * 0.4, big * 0.36);
-    }
     ctx.fillStyle = T.ink;
     ctx.globalAlpha = 0.62;
     ctx.font = `${(L.w < 3 ? 5.6 : 7) * u}px "Courier Prime", monospace`;
-    ctx.fillText(`${dateStr}  ·  ${tag}`, cx, top + fh * 0.76);
+    ctx.fillText(meta, cx, top + fh * 0.76);
   }
   ctx.restore();
 }
@@ -151,51 +167,7 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.arcTo(x, y, x + w, y, r);
   ctx.closePath();
 }
-
-function drawBow(ctx, x, y, s, color) {
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.fillStyle = color;
-  ctx.strokeStyle = 'rgba(0,0,0,0.25)';
-  ctx.lineWidth = s * 0.04;
-  for (const dir of [-1, 1]) {
-    ctx.beginPath(); ctx.moveTo(0, 0);
-    ctx.bezierCurveTo(dir * s * 1.1, -s * 0.8, dir * s * 1.25, s * 0.45, 0, 0);
-    ctx.fill(); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(0, 0);
-    ctx.quadraticCurveTo(dir * s * 0.3, s * 0.6, dir * s * 0.55, s * 1.15);
-    ctx.lineTo(dir * s * 0.32, s * 1.1);
-    ctx.quadraticCurveTo(dir * s * 0.15, s * 0.6, 0, 0);
-    ctx.fill();
-  }
-  ctx.beginPath(); ctx.ellipse(0, 0, s * 0.18, s * 0.22, 0, 0, 6.283); ctx.fill(); ctx.stroke();
-  ctx.restore();
-}
-
-function drawHolly(ctx, x, y, s) {
-  ctx.save();
-  ctx.translate(x, y);
-  const leaf = (ang) => {
-    ctx.save(); ctx.rotate(ang);
-    ctx.fillStyle = '#2f5a35';
-    ctx.beginPath(); ctx.moveTo(0, 0);
-    const n = 3;
-    for (let i = 1; i <= n; i++) ctx.quadraticCurveTo(s * (i - 0.5) / n * 1.4, -s * 0.12, s * i / n * 1.4, -s * 0.3);
-    for (let i = n; i >= 1; i--) ctx.quadraticCurveTo(s * (i - 0.5) / n * 1.4, s * 0.12, s * (i - 1) / n * 1.4, i === 1 ? 0 : s * 0.3);
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.lineWidth = s * 0.04;
-    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(s * 1.3, 0); ctx.stroke();
-    ctx.restore();
-  };
-  leaf(-2.6); leaf(-0.5);
-  for (const [bx, by] of [[-0.12, 0.08], [0.12, 0.12], [0, -0.1]]) {
-    const g = ctx.createRadialGradient(bx * s - s * 0.04, by * s - s * 0.04, 0, bx * s, by * s, s * 0.16);
-    g.addColorStop(0, '#e2525b'); g.addColorStop(1, '#8e141c');
-    ctx.fillStyle = g;
-    ctx.beginPath(); ctx.arc(bx * s, by * s, s * 0.15, 0, 6.283); ctx.fill();
-  }
-  ctx.restore();
-}
+export { roundRect };
 
 // Real booths hand you two 2x6 strips cut from one 4x6 print. This builds that sheet for the 1x4 layout,
 // so it can be printed at any photo lab / pharmacy kiosk as a standard 4x6 and cut down the middle.
@@ -213,7 +185,7 @@ export function printSheet(strip) {
 }
 
 // Builds the (cached) paper texture for a layout ahead of time, so the first strip render doesn't pay for it.
-export function warmStrip(layoutId, themeId, dpi) {
-  const L = LAYOUTS[layoutId];
-  paperTexture(Math.round(Math.round(L.w * dpi) / 2), Math.round(Math.round(L.h * dpi) / 2), THEMES[themeId].dark, 3 + 11);
+export function warmStrip(layoutId, frameHex, dpi) {
+  const { W, H } = stripSize(layoutId, dpi);
+  paperTexture(Math.round(W / 2), Math.round(H / 2), frameTheme(frameHex).dark, 3 + 11);
 }

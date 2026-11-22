@@ -22,27 +22,32 @@
     <p class="brand">hold it.</p>
     <h1><span class="script">Last Christmas</span><span class="sub">Hold the pose. We'll take it from here.</span></h1>
     <ol class="steps">
-      <li><b>Pick a strip.</b> Four or six frames, one pose per lyric.</li>
-      <li><b>Match the cut-out.</b> Line your body up with the outline and the camera fires on its own.</li>
-      <li><b>Keep both.</b> The printed strip, and a video of it set to the song.</li>
+      <li><b>Strike the pose.</b> The song cues each line, the camera fires when you match the cut-out.</li>
+      <li><b>Make it yours.</b> Frame colour, stickers, film and a note, after you shoot.</li>
+      <li><b>Keep everything.</b> The strip, a live GIF and a video set to the song.</li>
     </ol>
 
     <fieldset class="opt">
-      <legend>Layout</legend>
+      <legend>Choose your strip</legend>
       <div class="layouts" role="radiogroup" aria-label="Layout">
         <button type="button" role="radio" data-layout="1x4" aria-checked="false"><i class="ico l14"><s></s><s></s><s></s><s></s></i><span>1 × 4 strip</span><small>4 poses</small></button>
         <button type="button" role="radio" data-layout="2x2" aria-checked="false"><i class="ico l22"><s></s><s></s><s></s><s></s></i><span>2 × 2 box</span><small>4 poses</small></button>
         <button type="button" role="radio" data-layout="2x3" aria-checked="true"><i class="ico l23"><s></s><s></s><s></s><s></s><s></s><s></s></i><span>2 × 3 sheet</span><small>6 poses</small></button>
       </div>
     </fieldset>
-    <div class="opt-row">
-      <fieldset class="opt"><legend>Film</legend><div class="chips" data-group="film"></div></fieldset>
-      <fieldset class="opt"><legend>Frame</legend><div class="chips" data-group="theme"></div></fieldset>
-    </div>
+    <fieldset class="opt">
+      <legend>How to shoot</legend>
+      <div class="mode-row">
+        <div class="chips seg" data-group="mode"></div>
+        <div class="chips" data-group="timer" id="timer-chips"></div>
+      </div>
+      <p class="opt-hint" id="mode-hint"></p>
+    </fieldset>
 
     <div class="cta">
-      <button id="start" class="btn primary">Step into the booth</button>
-      <p class="fine">Camera stays on your device. Nothing is uploaded.</p>
+      <button id="start" class="btn primary big">Step into the booth</button>
+      <label class="link upload">or use photos from your camera roll<input type="file" id="upload" accept="image/*" multiple></label>
+      <p class="fine">Everything stays on your device, unless you choose to send it to your phone.</p>
     </div>
   </section>
   <aside class="home-preview" aria-label="Strip preview">
@@ -75,6 +80,7 @@
 
   <div id="loading" class="loading"><span class="dot"></span><p>warming up the booth…</p><button id="loading-back" class="link light">Go back</button></div>
   <div id="countdown" class="countdown" aria-live="assertive"></div>
+  <div id="timer-pill" class="timer-pill" aria-live="off" hidden></div>
   <div id="flash" class="flash"></div>
   <div id="print" class="print"><img alt=""><span></span></div>
 
@@ -94,53 +100,109 @@
 <section id="result" class="screen" aria-label="Your strip">
   <div class="result-stage">
     <div class="slot"><span></span></div>
-    <div class="developing"><span class="sheet"><img id="strip-img" alt="Your photo strip. Select a photo to retake it." title="Tap a photo to retake it"></span></div>
+    <div class="developing"><span class="sheet" id="sheet"><img id="strip-img" alt="Your photo strip"></span></div>
+    <p class="stage-hint">Tap a photo to retake it</p>
   </div>
-  <div class="result-panel">
-    <p class="brand">hold it.</p>
-    <h2 class="script">ta-da!</h2>
-    <p class="lede">Strike it. Keep it. Tap any photo to retake just that one.</p>
 
-    <div class="actions">
-      <button id="dl-strip" class="btn primary">Download strip</button>
-      <button id="share-strip" class="btn">Share</button>
-      <button id="make-video" class="btn">Make the video</button>
-    </div>
-    <div class="more">
-      <button id="dl-story" class="link">Story image (9:16)</button>
-      <button id="dl-print" class="link" hidden>4×6 print with two strips</button>
+  <div class="studio" id="studio">
+    <header class="studio-head">
+      <h2 class="script">ta-da!</h2>
+      <p class="lede">Make it yours, then keep it.</p>
+    </header>
+
+    <div class="tab-area">
+      <div class="tabs" role="tablist" aria-label="Customize">
+        <button role="tab" id="t-frame" aria-controls="p-frame" aria-selected="true">Frame</button>
+        <button role="tab" id="t-stickers" aria-controls="p-stickers" aria-selected="false" tabindex="-1">Stickers</button>
+        <button role="tab" id="t-film" aria-controls="p-film" aria-selected="false" tabindex="-1">Film</button>
+        <button role="tab" id="t-text" aria-controls="p-text" aria-selected="false" tabindex="-1">Text</button>
+        <i class="tab-ink" aria-hidden="true"></i>
+      </div>
+      <section class="panel" role="tabpanel" id="p-frame" aria-labelledby="t-frame">
+        <div class="swatches" id="swatches" role="radiogroup" aria-label="Frame colour"></div>
+      </section>
+      <section class="panel" role="tabpanel" id="p-stickers" aria-labelledby="t-stickers" hidden>
+        <div class="packs" id="packs" role="radiogroup" aria-label="Sticker pack"></div>
+        <button id="shuffle" class="btn small subtle" type="button">Shuffle stickers</button>
+      </section>
+      <section class="panel" role="tabpanel" id="p-film" aria-labelledby="t-film" hidden>
+        <div class="chips" data-group="film"></div>
+      </section>
+      <section class="panel" role="tabpanel" id="p-text" aria-labelledby="t-text" hidden>
+        <label class="field"><span>Note on the strip</span><input id="note" maxlength="24" placeholder="names, place, inside joke" autocomplete="off"></label>
+        <label class="toggle"><input type="checkbox" id="show-date"><span>Date</span></label>
+        <label class="toggle"><input type="checkbox" id="show-captions"><span>Lyric captions</span></label>
+      </section>
     </div>
 
-    <div class="restyle">
-      <fieldset class="opt"><legend>Film</legend><div class="chips" data-group="film"></div></fieldset>
-      <fieldset class="opt"><legend>Frame</legend><div class="chips" data-group="theme"></div></fieldset>
-      <label class="opt note"><span>Note on the strip</span><input id="note" maxlength="24" placeholder="names, place, inside joke" autocomplete="off"></label>
-      <div class="opt"><span class="legend">Retake one</span><div id="retake-chips" class="chips num"></div></div>
-    </div>
-
-    <div class="video-opts">
-      <fieldset class="opt"><legend>Lyrics</legend><div class="chips" data-group="lyric"></div></fieldset>
-      <fieldset class="opt"><legend>Surface</legend><div class="chips" data-group="surface"></div></fieldset>
-    </div>
-
-    <div id="video-box" class="video-box" hidden>
-      <div class="progress"><i></i></div>
-      <p class="progress-label">filming your strip…</p>
-      <video id="video-out" playsinline controls loop hidden></video>
-      <div id="video-actions" class="actions" hidden>
-        <button id="dl-video" class="btn primary">Download video</button>
-        <button id="share-video" class="btn">Share</button>
-        <button id="copy-caption" class="link">Copy a caption</button>
+    <div class="save" id="save">
+      <button id="dl-strip" class="btn primary wide">Download strip</button>
+      <div class="save-row">
+        <button id="dl-gif" class="btn"><span>Live GIF</span></button>
+        <button id="open-video" class="btn">Video</button>
+        <div class="more-wrap">
+          <button id="more-btn" class="btn" aria-haspopup="menu" aria-expanded="false" aria-controls="more-menu">More</button>
+          <div id="more-menu" class="menu" role="menu" hidden>
+            <button role="menuitem" id="send-phone">Send to phone (QR)</button>
+            <button role="menuitem" id="share-strip">Share strip</button>
+            <button role="menuitem" id="dl-story">Story image, 9:16</button>
+            <button role="menuitem" id="dl-print" hidden>4×6 print, two strips</button>
+          </div>
+        </div>
       </div>
     </div>
-    <p id="audio-note" class="fine" hidden></p>
 
-    <div class="secondary">
-      <button id="retake" class="link">Retake all</button>
+    <section id="video-card" class="video-card" hidden aria-label="Video">
+      <header><h3>The video</h3><button id="close-video" class="link" type="button">Back</button></header>
+      <div class="v-setup">
+        <p class="fine">A phone camera films your printed strip, one photo per lyric, with the song.</p>
+        <fieldset class="opt"><legend>Lyrics</legend><div class="chips" data-group="lyric"></div></fieldset>
+        <fieldset class="opt"><legend>Surface</legend><div class="chips" data-group="surface"></div></fieldset>
+        <button id="make-video" class="btn primary wide">Make the video</button>
+      </div>
+      <div class="v-progress" hidden>
+        <div class="progress"><i></i></div>
+        <p class="progress-label">filming your strip…</p>
+      </div>
+      <div class="v-done" hidden>
+        <video id="video-out" playsinline controls loop></video>
+        <button id="dl-video" class="btn primary wide">Download video</button>
+        <div class="save-row">
+          <button id="share-video" class="btn">Share</button>
+          <button id="copy-caption" class="btn">Copy caption</button>
+          <button id="redo-video" class="btn">Change look</button>
+        </div>
+      </div>
+      <p id="audio-note" class="fine" hidden></p>
+    </section>
+
+    <footer class="studio-foot">
+      <button id="retake" class="link">Take new photos</button>
       <button id="home-btn" class="link">Change layout</button>
-    </div>
+    </footer>
   </div>
 </section>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<dialog id="qr-dialog" class="qr-dialog" aria-labelledby="qr-title">
+  <form method="dialog" class="qr-top"><h3 id="qr-title" class="script">to your phone</h3><button class="link" value="close">Close</button></form>
+  <div class="qr-pick">
+    <p class="fine">Pick what to send. A private copy is uploaded, and it deletes itself after 24 hours.</p>
+    <div class="chips qr-kinds" id="qr-kind" role="radiogroup" aria-label="What to send">
+      <button type="button" role="radio" data-kind="strip" aria-checked="true">Strip</button>
+      <button type="button" role="radio" data-kind="gif" aria-checked="false">Live GIF</button>
+      <button type="button" role="radio" data-kind="video" aria-checked="false">Video</button>
+    </div>
+    <button id="qr-make" class="btn primary wide" type="button">Make the QR code</button>
+  </div>
+  <div class="qr-result" hidden>
+    <div class="qr-code" id="qr-code" role="img" aria-label="QR code linking to your file"></div>
+    <p class="fine">Point your phone's camera at the code. The link works for 24 hours.</p>
+    <div class="save-row two"><button id="qr-copy" class="btn" type="button">Copy link</button><button id="qr-again" class="btn" type="button">Send another</button></div>
+  </div>
+  <p class="fine qr-status" id="qr-status" aria-live="polite"></p>
+</dialog>
 
 <script type="module" src="js/app.js"></script>
 </body>

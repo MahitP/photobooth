@@ -1,7 +1,8 @@
 import { POSES, evaluatePose } from './poses.js';
 import { Overlay, coverMap, ghostIcon } from './overlay.js';
 import { FILMS, FILM_CSS, developPhoto, smartCrop, canvas } from './film.js';
-import { LAYOUTS, THEMES, renderStrip, cellRects, cellAspect, printSheet, warmStrip } from './strip.js';
+import { LAYOUTS, FRAMES, frameTheme, renderStrip, cellRects, cellAspect, footerTop, stripSize, printSheet, warmStrip } from './strip.js';
+import { PACKS, packPreview, stickerLayer } from './stickers.js';
 import { SONGS, DEFAULT_SONG, beatsFor } from './songs.js';
 import { createRenderer, exportVideo, songSegment, LYRIC_STYLES, SURFACES } from './video.js';
 
@@ -21,19 +22,26 @@ const springEase = (zeta = 0.5, w = 13) => {
   return `linear(${pts.join(',')})`;
 };
 const EASE_SPRING = CSS.supports('transition-timing-function', 'linear(0, 1)') ? springEase() : 'cubic-bezier(.2,.9,.25,1.15)';
+const SHARE_API = 'https://holdit-share.mahitp-16.workers.dev'; // share-worker/: QR links, files expire after 24 h
 const SHARE_TEXT = 'last christmas photobooth, one pose per lyric #lastchristmas #photobooth #christmas';
 
 // ---------- settings (remembered per browser) ----------
 const store = {
-  get(k, d, valid) { try { const v = localStorage.getItem(`pb.${k}`); return v && (!valid || valid[v]) ? v : d; } catch { return d; } },
+  get(k, d, valid) { try { const v = localStorage.getItem(`pb.${k}`); return v != null && (!valid || valid[v]) ? v : d; } catch { return d; } },
   set(k, v) { try { localStorage.setItem(`pb.${k}`, v); } catch { /* private mode */ } },
 };
-const GROUPS = { film: FILMS, theme: THEMES, lyric: LYRIC_STYLES, surface: SURFACES, layout: LAYOUTS };
+const MODES = { pose: 'Pose', timer: 'Timer' };
+const TIMERS = { 3: '3s', 5: '5s', 10: '10s' };
+const GROUPS = { film: FILMS, lyric: LYRIC_STYLES, surface: SURFACES, layout: LAYOUTS, mode: MODES, timer: TIMERS };
 const opts = {
-  layout: store.get('layout', '2x3', LAYOUTS), film: store.get('film', 'bw', FILMS), theme: store.get('theme', 'merry', THEMES),
+  layout: store.get('layout', '2x3', LAYOUTS), film: store.get('film', 'bw', FILMS),
   lyric: store.get('lyric', 'serif', LYRIC_STYLES), surface: store.get('surface', 'wood', SURFACES),
+  mode: store.get('mode', 'pose', MODES), timer: store.get('timer', '5', TIMERS),
+  frame: store.get('frame', 'white'), custom: store.get('custom', '#e8d8c3'), pack: store.get('pack', 'christmas', PACKS),
+  seed: 1, showDate: store.get('showDate', '1') === '1', showCaptions: store.get('showCaptions', '1') === '1',
   flash: store.get('flash', 'on') === 'on',
 };
+const frameHex = () => (opts.frame === 'custom' ? opts.custom : (FRAMES[opts.frame] ?? FRAMES.white).hex);
 
 function buildChips() {
   for (const el of document.querySelectorAll('.chips[data-group]')) {
@@ -53,12 +61,18 @@ function syncChips() {
     if (pill && on) Object.assign(pill.style, { left: `${on.offsetLeft}px`, top: `${on.offsetTop}px`, width: `${on.offsetWidth}px`, height: `${on.offsetHeight}px` });
   }
   for (const b of document.querySelectorAll('.layouts button')) b.setAttribute('aria-checked', b.dataset.layout === opts.layout);
+  // the timer lengths only matter in timer mode
+  $('#timer-chips').hidden = opts.mode !== 'timer';
+  $('#mode-hint').textContent = opts.mode === 'pose'
+    ? 'Hands-free: the camera fires the moment you match each pose.'
+    : `A ${opts.timer}-second countdown for every photo. The pose guide still shows you what to do.`;
 }
 function setOpt(g, v) {
   if (opts[g] === v) return;
   opts[g] = v; store.set(g, v); syncChips();
-  if (['layout', 'film', 'theme'].includes(g)) renderPreview();
-  if (['film', 'theme'].includes(g) && $('#result').classList.contains('active')) developStrip(false);
+  if (g === 'mode' || g === 'timer') requestAnimationFrame(syncChips); // timer chips just became visible
+  if (['layout', 'film'].includes(g)) renderPreview();
+  if (g === 'film' && $('#result').classList.contains('active')) developStrip(false);
   if (['lyric', 'surface'].includes(g)) markVideoStale();
 }
 
@@ -68,16 +82,26 @@ function show(id) {
   if (document.startViewTransition && !REDUCED) document.startViewTransition(swap); else swap();
 }
 function setText(sel, text) { const el = $(sel); if (el.textContent !== text) el.textContent = text; }
+let toastTimer;
+function toast(msg) {
+  const t = $('#toast');
+  t.textContent = msg; t.classList.add('on');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('on'), 2200);
+}
 
 const fontsReady = () => Promise.all(['40px "Pinyon Script"', '20px "Homemade Apple"', '12px "Courier Prime"', '600 20px "Bodoni Moda"',
   '40px "Libre Caslon Text"', '700 40px "TikTok Sans"'].map((f) => document.fonts.load(f))).catch(() => {});
 
 // ---------- home preview ----------
-const PREVIEW_TONES = { bw: ['#9a9692', '#4a4846'], sepia: ['#8a6c50', '#4a3626'], color: ['#b9a596', '#6b5a52'], golden: ['#c4a47c', '#6e5238'], cool: ['#a7b0b7', '#535e68'] };
+const PREVIEW_TONES = { bw: ['#9a9692', '#4a4846'], noir: ['#8a8784', '#232221'], sepia: ['#8a6c50', '#4a3626'], color: ['#b9a596', '#6b5a52'],
+  vivid: ['#c9a28c', '#6e4a40'], golden: ['#c4a47c', '#6e5238'], cool: ['#a7b0b7', '#535e68'], soft: ['#cbbdb2', '#8c7e76'] };
+let previewToken = 0;
 async function renderPreview() {
+  const token = ++previewToken;
   await fontsReady();
   const L = LAYOUTS[opts.layout];
-  const rects = cellRects(opts.layout, 150);
+  const dpi = 150;
+  const rects = cellRects(opts.layout, dpi);
   const beats = song.beats.slice(0, L.count);
   const tone = PREVIEW_TONES[opts.film];
   const photos = rects.map((r, i) => {
@@ -89,7 +113,10 @@ async function renderPreview() {
     x.drawImage(icon, (r.w - icon.width) / 2, r.h - icon.height * 0.92);
     return c;
   });
-  const strip = renderStrip({ layoutId: opts.layout, themeId: opts.theme, photos, captions: beats.map((b) => b.caption), note: store.get('note', ''), dpi: 150 });
+  const { W, H } = stripSize(opts.layout, dpi);
+  const stickers = await stickerLayer(opts.pack, W, H, rects, footerTop(opts.layout, dpi), dpi, opts.seed).catch(() => null);
+  if (token !== previewToken) return;
+  const strip = renderStrip({ layoutId: opts.layout, frame: frameHex(), photos, captions: opts.showCaptions ? beats.map((b) => b.caption) : [], note: store.get('note', ''), showDate: opts.showDate, stickers, dpi });
   $('#preview').src = strip.toDataURL('image/jpeg', 0.9);
 }
 
@@ -173,8 +200,8 @@ const overlay = new Overlay($('#overlay'));
 let vision = null;
 const B = {
   active: false, phase: 'idle', cur: 0, queue: [], history: [], photos: [], beats: [], end: 0, layout: '2x3', retakeOne: false,
-  memory: {}, frame: null, hold: null, lost: null, cdStart: 0, cdShown: 0, manual: false, poseStart: 0,
-  stream: null, mirrored: true, devices: [], devIdx: 0, wake: null, dark: false, lightAt: 0,
+  memory: {}, frame: null, hold: null, lost: null, cdStart: 0, cdShown: 0, manual: false, poseStart: 0, timerEnd: 0,
+  stream: null, mirrored: true, devices: [], devIdx: 0, wake: null, dark: false, lightAt: 0, ring: [], ringAt: 0,
 };
 
 function trayIcon(li, k) {
@@ -195,6 +222,13 @@ function buildTray() {
   });
 }
 
+const HAS_RVFC = 'requestVideoFrameCallback' in HTMLVideoElement.prototype;
+function watchFrames() {
+  if (!HAS_RVFC) return;
+  const onFrame = () => { B.newFrame = true; if (B.stream) video.requestVideoFrameCallback(onFrame); };
+  video.requestVideoFrameCallback(onFrame);
+}
+
 async function startCamera(deviceId) {
   B.stream?.getTracks().forEach((t) => t.stop());
   const size = { width: { ideal: 1920 }, height: { ideal: 1080 } };
@@ -211,13 +245,6 @@ async function startCamera(deviceId) {
   $('#flip').hidden = B.devices.length < 2;
 }
 
-const HAS_RVFC = 'requestVideoFrameCallback' in HTMLVideoElement.prototype;
-function watchFrames() {
-  if (!HAS_RVFC) return;
-  const onFrame = () => { B.newFrame = true; if (B.stream) video.requestVideoFrameCallback(onFrame); };
-  video.requestVideoFrameCallback(onFrame);
-}
-
 async function keepAwake() {
   try { B.wake = await navigator.wakeLock?.request('screen'); } catch { /* not supported / denied */ }
 }
@@ -231,7 +258,7 @@ async function enterBooth(only = null) {
   const { beats, end } = retakeOne ? { beats: R.beats, end: R.end } : beatsFor(song, LAYOUTS[layout].count);
   const queue = retakeOne ? [only] : beats.map((_, k) => k);
   Object.assign(B, { beats, end, layout, retakeOne, photos: retakeOne ? R.photos.slice() : [], queue, cur: queue.shift(), history: [],
-    memory: {}, phase: 'loading', hold: null, lost: null, active: true });
+    memory: {}, phase: 'loading', hold: null, lost: null, active: true, ring: [] });
   show('booth');
   buildTray();
   video.style.filter = FILM_CSS[opts.film];
@@ -239,12 +266,13 @@ async function enterBooth(only = null) {
   setText('#loading p', 'warming up the booth…');
   setText('#instruction', ''); setText('#meta', ''); setText('#hint', '');
   $('#undo').hidden = true;
+  $('#timer-pill').hidden = true;
   overlay.resize();
 
   try {
     await startCamera();
   } catch (e) {
-    setText('#loading p', 'The booth needs your camera. Allow camera access, then try again.');
+    setText('#loading p', 'The booth needs your camera. Allow camera access, or go back and use photos from your camera roll.');
     return;
   }
   if (!vision) {
@@ -289,6 +317,18 @@ function checkLight(now) {
   B.dark = sum / (d.length / 4) < 62;
 }
 
+// "Live photo": keep the last ~1.1 s of small frames so each photo also has a moving clip for the GIF.
+const CLIP_W = 360, CLIP_N = 12, CLIP_MS = 90;
+function recordClip(now) {
+  if (now - B.ringAt < CLIP_MS || !video.videoWidth) return;
+  B.ringAt = now;
+  const c = canvas(CLIP_W, Math.round(CLIP_W * video.videoHeight / video.videoWidth)), x = c.getContext('2d');
+  if (B.mirrored) { x.translate(c.width, 0); x.scale(-1, 1); }
+  x.drawImage(video, 0, 0, c.width, c.height);
+  B.ring.push(c);
+  if (B.ring.length > CLIP_N) B.ring.shift();
+}
+
 function loop() {
   if (!B.active) return;
   requestAnimationFrame(loop);
@@ -300,6 +340,7 @@ function loop() {
   // the camera delivers ~30 fps but the screen refreshes at 60-120 Hz: only run the models on a new frame
   if (vision && video.readyState >= 2 && (B.newFrame || !HAS_RVFC)) { B.newFrame = false; B.frame = vision.detect(video, B.mirrored); }
   checkLight(now);
+  if (B.phase === 'pose' || B.phase === 'countdown' || B.phase === 'timer') recordClip(now);
   const map = coverMap(video.videoWidth || 16, video.videoHeight || 9, overlay.c.clientWidth, overlay.c.clientHeight);
   const poseId = B.phase === 'start' ? 'frame' : B.beats[B.cur]?.pose;
   const result = poseId && B.frame ? evaluatePose(poseId, B.frame, B.memory, now) : null;
@@ -316,6 +357,12 @@ function loop() {
     const stuck = now - B.poseStart > 9000;
     if (now - B.poseStart > 11000 && !B.cueAgain) { B.cueAgain = true; playCue(B.cur, 0.45); } // one gentle reminder
     setText('#hint', ok ? 'hold it…' : stuck ? 'having trouble? press space to snap' : darkHint || (result?.hint ?? ''));
+  } else if (B.phase === 'timer') {
+    const left = Math.ceil((B.timerEnd - now) / 1000);
+    if (left <= 0) capture();
+    else if (left <= 3) { $('#timer-pill').hidden = true; setCountdown(left); }
+    else { const pill = $('#timer-pill'); pill.hidden = false; setText('#timer-pill', String(left)); }
+    setText('#hint', ok ? 'perfect, hold it…' : darkHint || (result?.hint ?? ''));
   } else if (B.phase === 'countdown') {
     if (ok) B.lost = null; else B.lost ??= now;
     if (!B.manual && B.lost && now - B.lost > LOST_MS) {
@@ -346,13 +393,17 @@ function setPoseUI() {
 }
 
 function beginPoses() {
-  B.phase = 'pose'; B.hold = null; B.poseStart = performance.now(); B.cueAgain = false;
+  B.hold = null; B.poseStart = performance.now(); B.cueAgain = false; B.ring = [];
+  // timer mode: every photo gets the same countdown, the pose guide is advisory
+  if (opts.mode === 'timer') { B.phase = 'timer'; B.timerEnd = B.poseStart + Number(opts.timer) * 1000; B.cdShown = 0; }
+  else B.phase = 'pose';
   setPoseUI();
   playCue(B.cur);
 }
 
 function startCountdown(manual) {
   B.phase = 'countdown'; B.cdStart = performance.now(); B.manual = manual; B.lost = null; B.cdShown = 0;
+  $('#timer-pill').hidden = true;
 }
 
 function setCountdown(n) {
@@ -370,7 +421,7 @@ function setCountdown(n) {
 
 // Go back one shot: forget the last photo and pose it again.
 function undo() {
-  if (B.phase !== 'pose' || !B.history.length) return;
+  if (!['pose', 'timer'].includes(B.phase) || !B.history.length) return;
   const k = B.history.pop();
   B.queue.unshift(B.cur);
   B.cur = k;
@@ -382,8 +433,11 @@ function undo() {
 async function capture() {
   B.phase = 'capture';
   setCountdown('');
+  $('#timer-pill').hidden = true;
   const k = B.cur;
   const beat = B.beats[k];
+  const clip = B.ring.slice(); // the live-photo frames leading up to the shot
+  B.ring = [];
   const flash = $('#flash');
   // screen flash: light the face with a white screen for a moment before the frame is grabbed, like a selfie flash
   if (opts.flash) { flash.classList.remove('go'); flash.classList.add('fill'); await wait(170); }
@@ -413,7 +467,8 @@ async function capture() {
   const thumb = canvas(640, 640 / cellAspect(B.layout));
   thumb.getContext('2d').drawImage(raw, crop.x, crop.y, crop.w, crop.h, 0, 0, thumb.width, thumb.height);
   const url = thumb.toDataURL('image/jpeg', 0.85);
-  B.photos[k] = { raw, face, focus, caption: beat.caption, thumb: url };
+  // a couple of frames after the shutter too, so the live clip doesn't end abruptly
+  B.photos[k] = { raw, face, focus, caption: beat.caption, thumb: url, clip: [...clip, raw] };
 
   flash.classList.remove('fill'); void flash.offsetWidth; flash.classList.add('go');
   // the lens squeezes a touch on the shot
@@ -451,22 +506,47 @@ async function capture() {
   beginPoses();
 }
 
+// ---------- upload: use photos from the camera roll instead of the camera ----------
+async function fromUpload(files) {
+  const list = [...files].filter((f) => f.type.startsWith('image/'));
+  if (!list.length) return;
+  const { beats, end } = beatsFor(song, LAYOUTS[opts.layout].count);
+  if (list.length < beats.length) toast(`Picked ${list.length} of ${beats.length}, repeating some to fill the strip`);
+  const aspect = cellAspect(opts.layout);
+  const photos = [];
+  for (let k = 0; k < beats.length; k++) {
+    const file = list[k % list.length];
+    const bmp = await createImageBitmap(file).catch(() => null);
+    if (!bmp) { toast('One of those photos could not be opened'); return; }
+    const s = Math.min(1, 1920 / Math.max(bmp.width, bmp.height));
+    const raw = canvas(bmp.width * s, bmp.height * s);
+    raw.getContext('2d').drawImage(bmp, 0, 0, raw.width, raw.height);
+    const crop = smartCrop(raw.width, raw.height, null, aspect);
+    const thumb = canvas(640, 640 / aspect);
+    thumb.getContext('2d').drawImage(raw, crop.x, crop.y, crop.w, crop.h, 0, 0, thumb.width, thumb.height);
+    photos.push({ raw, face: null, focus: null, caption: beats[k].caption, thumb: thumb.toDataURL('image/jpeg', 0.85), clip: null });
+  }
+  Object.assign(B, { photos, beats, end, layout: opts.layout, retakeOne: false });
+  finish();
+}
+
 // ---------- result ----------
 const R = { photos: null, beats: null, end: 0, layout: '2x3', strip: null, stripBlob: null, rects: null, faces: null, stripUrl: null,
-  videoUrl: null, videoBlob: null, videoExt: 'mp4', rendering: false, token: 0, stripBlobFor: null, note: store.get('note', '') };
+  videoUrl: null, videoBlob: null, videoExt: 'mp4', rendering: false, token: 0, stripBlobFor: null, note: store.get('note', ''), stickers: new Map() };
 
 async function finish() {
   leaveBooth();
   Object.assign(R, { photos: B.photos, beats: B.beats, end: B.end, layout: B.layout });
   show('result');
-  syncChips(); // chips were hidden while the booth ran, so place their highlight now
-  $('#video-box').hidden = true;
+  requestAnimationFrame(syncChips); // chips were hidden while the booth ran, so place their highlight now
+  closeVideo();
+  clearVideo();
   $('#audio-note').hidden = !!songBuffer;
   $('#audio-note').textContent = songBuffer ? '' : `Add ${song.src} to put the song in the video.`;
   $('#dl-print').hidden = R.layout !== '1x4';
   $('#note').value = R.note;
-  $('#retake-chips').innerHTML = R.beats.map((b, k) => `<button type="button" data-k="${k}" aria-label="Retake photo ${k + 1}, ${b.caption}">${k + 1}</button>`).join('');
-  clearVideo();
+  $('#show-date').checked = opts.showDate;
+  $('#show-captions').checked = opts.showCaptions;
   await wait(30);
   await developStrip(true);
 }
@@ -487,7 +567,17 @@ const idle = (fn) => ('requestIdleCallback' in window ? requestIdleCallback(fn, 
 function predevelop(k) {
   const p = B.photos[k], layout = B.layout, film = opts.film;
   idle(() => { if (B.photos[k] === p) developOne(p, k, layout, film); });
-  if (k === 0) idle(() => warmStrip(layout, opts.theme, DPI)); // paper texture, built once
+  if (k === 0) idle(() => warmStrip(layout, frameHex(), DPI)); // paper texture, built once
+}
+
+async function stickersFor(layout) {
+  if (opts.pack === 'none') return null;
+  const key = `${layout}:${opts.pack}:${opts.seed}`;
+  if (!R.stickers.has(key)) {
+    const { W, H } = stripSize(layout, DPI);
+    R.stickers.set(key, await stickerLayer(opts.pack, W, H, cellRects(layout, DPI), footerTop(layout, DPI), DPI, opts.seed));
+  }
+  return R.stickers.get(key);
 }
 
 // (Re)builds the strip from the developed shots. Only shots not developed yet are processed here.
@@ -501,20 +591,40 @@ async function developStrip(animate) {
     devs.push(cached || developOne(R.photos[k], k, R.layout, opts.film));
     if (!cached) { await wait(0); if (token !== R.token) return; } // let frames through between photos
   }
-  const strip = renderStrip({ layoutId: R.layout, themeId: opts.theme, photos: devs.map((d) => d.img), captions: R.photos.map((p) => p.caption), note: R.note, dpi: DPI });
+  const stickers = await stickersFor(R.layout);
+  if (token !== R.token) return;
+  const strip = renderStrip({ layoutId: R.layout, frame: frameHex(), photos: devs.map((d) => d.img), captions: opts.showCaptions ? R.photos.map((p) => p.caption) : [],
+    note: R.note, showDate: opts.showDate, stickers, dpi: DPI });
   // JPEG for the on-screen preview (fast to encode); the lossless PNG for download is made in the background.
   const preview = await new Promise((r) => strip.toBlob(r, 'image/jpeg', 0.92));
   if (token !== R.token) return;
-  Object.assign(R, { strip, stripBlob: null, rects, faces: devs.map((d) => d.face) });
+  Object.assign(R, { strip, stripBlob: null, gifBlob: null, rects, faces: devs.map((d) => d.face) });
   if (R.stripUrl) URL.revokeObjectURL(R.stripUrl);
   R.stripUrl = URL.createObjectURL(preview);
   const img = $('#strip-img');
   img.src = R.stripUrl;
   await img.decode().catch(() => {});
+  placeRetakeTargets();
   const res = $('#result');
   if (animate) { res.classList.remove('printing'); void res.offsetWidth; res.classList.add('printing'); }
   markVideoStale();
   idle(() => stripPng());
+}
+
+// Invisible buttons over each photo on the strip: hover / focus shows "Retake", click retakes just that one.
+function placeRetakeTargets() {
+  const sheet = $('#sheet');
+  sheet.querySelectorAll('.cell-hit').forEach((b) => b.remove());
+  const { W, H } = stripSize(R.layout, DPI);
+  R.rects.forEach((r, k) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'cell-hit';
+    b.setAttribute('aria-label', `Retake photo ${k + 1}, ${R.beats[k].caption}`);
+    Object.assign(b.style, { left: `${(r.x / W) * 100}%`, top: `${(r.y / H) * 100}%`, width: `${(r.w / W) * 100}%`, height: `${(r.h / H) * 100}%` });
+    b.innerHTML = '<span>Retake</span>';
+    b.addEventListener('click', () => enterBooth(k));
+    sheet.append(b);
+  });
 }
 
 // Lossless PNG of the current strip, made once per version of the strip.
@@ -529,11 +639,8 @@ async function stripPng() {
 function clearVideo() {
   if (R.videoUrl) URL.revokeObjectURL(R.videoUrl);
   Object.assign(R, { videoUrl: null, videoBlob: null });
-  $('#video-out').hidden = true;
-  $('#video-actions').hidden = true;
-  $('#make-video').textContent = 'Make the video';
 }
-function markVideoStale() { if (R.videoUrl) $('#make-video').textContent = 'Re-make the video'; }
+function markVideoStale() { if (R.videoUrl) { clearVideo(); videoStep('setup'); } }
 
 function download(url, name) {
   const a = document.createElement('a');
@@ -551,37 +658,133 @@ async function shareOrDownload(blob, name) {
     catch (e) { if (e.name === 'AbortError') return; }
   }
   downloadBlob(blob, name);
+  toast('Saved to your downloads');
 }
 
 const fileBase = () => `hold-it-last-christmas-${R.layout}`;
 
+// ---------- video card: options -> progress -> result. Download only exists once there is a video. ----------
+function videoStep(step) {
+  $('.v-setup').hidden = step !== 'setup';
+  $('.v-progress').hidden = step !== 'progress';
+  $('.v-done').hidden = step !== 'done';
+}
+function openVideo() {
+  $('#studio').classList.add('video-open');
+  $('#video-card').hidden = false;
+  videoStep(R.videoUrl ? 'done' : 'setup');
+  requestAnimationFrame(syncChips);
+  $('#video-card').scrollIntoView({ block: 'nearest', behavior: REDUCED ? 'auto' : 'smooth' });
+}
+function closeVideo() {
+  $('#studio').classList.remove('video-open');
+  $('#video-card').hidden = true;
+  $('#video-out').pause?.();
+}
+
 async function makeVideo() {
   if (R.rendering || !R.strip) return;
   R.rendering = true;
-  const btn = $('#make-video');
-  btn.disabled = true;
-  $('#video-box').hidden = false;
-  $('#video-out').hidden = true; $('#video-actions').hidden = true;
+  videoStep('progress');
   const bar = $('.progress i');
   bar.style.width = '0%';
   setText('.progress-label', 'filming your strip…');
   try {
     await fontsReady();
-    const renderer = createRenderer({ strip: R.strip, rects: R.rects, faces: R.faces, beats: R.beats, end: R.end, theme: opts.theme, surface: opts.surface, lyricStyle: opts.lyric });
+    const renderer = createRenderer({ strip: R.strip, rects: R.rects, faces: R.faces, beats: R.beats, end: R.end, surface: opts.surface, lyricStyle: opts.lyric });
     const audio = songBuffer ? await songSegment(songBuffer, song, renderer.lead, renderer.duration) : null;
-    const { blob, ext } = await exportVideo(renderer, audio, (p) => { bar.style.width = `${Math.round(p * 100)}%`; });
-    if (R.videoUrl) URL.revokeObjectURL(R.videoUrl);
+    const { blob, ext } = await exportVideo(renderer, audio, (p) => { bar.style.width = `${Math.round(p * 100)}%`; setText('.progress-label', `filming your strip… ${Math.round(p * 100)}%`); });
+    clearVideo();
     Object.assign(R, { videoUrl: URL.createObjectURL(blob), videoBlob: blob, videoExt: ext });
     const v = $('#video-out');
-    v.src = R.videoUrl; v.hidden = false; v.play().catch(() => {});
-    $('#video-actions').hidden = false;
-    setText('.progress-label', `done · ${(blob.size / 1048576).toFixed(1)} MB`);
-    btn.textContent = 'Re-make the video';
+    v.src = R.videoUrl;
+    videoStep('done');
+    v.play().catch(() => {});
   } catch (e) {
     console.error(e);
-    setText('.progress-label', 'Could not make the video in this browser. Try Chrome, Edge or Safari.');
+    videoStep('setup');
+    toast('Could not make the video in this browser. Try Chrome, Edge or Safari.');
   } finally {
     R.rendering = false;
+  }
+}
+
+// ---------- GIF ----------
+// Built once per version of the strip, then reused for download and for the QR link.
+async function buildGif(onProgress = () => {}) {
+  if (R.gifBlob && R.gifFor === R.strip) return R.gifBlob;
+  const strip = R.strip;
+  const { liveStripGif, flipbookGif } = await import('./gif.js');
+  await fontsReady();
+  const live = R.photos.some((p) => p.clip?.length);
+  const blob = live
+    ? await liveStripGif({ layoutId: R.layout, frame: frameHex(), photos: R.photos, captions: opts.showCaptions ? R.photos.map((p) => p.caption) : [], note: R.note,
+      showDate: opts.showDate, stickers: await stickersFor(R.layout), film: opts.film, onProgress })
+    : await flipbookGif({ photos: R.photos, captions: R.photos.map((p) => p.caption), film: opts.film, frameHex: frameHex(), ink: frameTheme(frameHex()).ink, onProgress });
+  Object.assign(R, { gifBlob: blob, gifFor: strip, gifLive: live });
+  return blob;
+}
+
+let gifBusy = false;
+async function makeGif() {
+  if (gifBusy || !R.strip) return;
+  gifBusy = true;
+  const btn = $('#dl-gif'), label = btn.querySelector('span');
+  btn.classList.add('busy');
+  try {
+    const blob = await buildGif((p) => { label.textContent = `Making GIF ${Math.round(p * 100)}%`; btn.style.setProperty('--p', p); });
+    shareOrDownload(blob, `${fileBase()}${R.gifLive ? '-live' : ''}.gif`);
+  } catch (e) {
+    console.error(e);
+    toast('Could not make the GIF here');
+  } finally {
+    gifBusy = false;
+    btn.classList.remove('busy'); btn.style.removeProperty('--p');
+    label.textContent = 'Live GIF';
+  }
+}
+
+// ---------- send to phone: upload on request, show a QR the phone can scan ----------
+let qrKind = 'strip', qrUrl = '';
+function qrView(step, status = '') {
+  $('.qr-pick').hidden = step !== 'pick';
+  $('.qr-result').hidden = step !== 'result';
+  $('#qr-status').textContent = status;
+}
+function openQr() {
+  const video = $('#qr-kind [data-kind=video]');
+  video.disabled = !R.videoBlob;
+  video.title = R.videoBlob ? '' : 'Make the video first';
+  if (qrKind === 'video' && !R.videoBlob) qrKind = 'strip';
+  for (const b of document.querySelectorAll('#qr-kind button')) b.setAttribute('aria-checked', b.dataset.kind === qrKind);
+  qrView('pick');
+  $('#qr-dialog').showModal();
+}
+async function makeQr() {
+  const btn = $('#qr-make');
+  btn.disabled = true;
+  try {
+    let blob;
+    // a high-quality JPEG for the phone: ~2-3 MB instead of a ~16 MB lossless PNG, looks identical on a screen
+    if (qrKind === 'strip') { qrView('pick', 'preparing the strip…'); blob = await new Promise((r) => R.strip.toBlob(r, 'image/jpeg', 0.93)); }
+    else if (qrKind === 'gif') blob = await buildGif((p) => qrView('pick', `making the GIF… ${Math.round(p * 100)}%`));
+    else blob = R.videoBlob;
+    if (!blob) throw new Error('nothing to send');
+    if (blob.size > 24 * 1024 * 1024) { qrView('pick', 'That file is too big to send. Download it instead.'); return; }
+    qrView('pick', `uploading ${(blob.size / 1048576).toFixed(1)} MB…`);
+    const res = await fetch(`${SHARE_API}/upload`, { method: 'POST', headers: { 'Content-Type': blob.type }, body: blob });
+    if (!res.ok) throw new Error(`upload ${res.status}`);
+    qrUrl = (await res.json()).url;
+    const { default: qrcode } = await import('https://cdn.jsdelivr.net/npm/qrcode-generator@2.0.4/+esm');
+    const qr = qrcode(0, 'M');
+    qr.addData(qrUrl);
+    qr.make();
+    $('#qr-code').innerHTML = qr.createSvgTag({ cellSize: 8, margin: 2, scalable: true });
+    qrView('result');
+  } catch (e) {
+    console.error(e);
+    qrView('pick', 'Could not upload right now. Check your connection and try again.');
+  } finally {
     btn.disabled = false;
   }
 }
@@ -590,7 +793,7 @@ async function makeVideo() {
 async function storyImage() {
   if (!R.strip) return;
   await fontsReady();
-  const r = createRenderer({ strip: R.strip, rects: R.rects, faces: R.faces, beats: R.beats, end: R.end, theme: opts.theme, surface: opts.surface, lyricStyle: opts.lyric });
+  const r = createRenderer({ strip: R.strip, rects: R.rects, faces: R.faces, beats: R.beats, end: R.end, surface: opts.surface, lyricStyle: opts.lyric });
   const c = r.frame(r.duration - 0.05);
   const blob = await new Promise((res) => c.toBlob(res, 'image/png'));
   shareOrDownload(blob, `${fileBase()}-story.png`);
@@ -600,14 +803,75 @@ async function printSheetDownload() {
   if (!R.strip) return;
   const blob = await new Promise((res) => printSheet(R.strip).toBlob(res, 'image/png'));
   downloadBlob(blob, `${fileBase()}-4x6-print.png`);
+  toast('4×6 print saved');
 }
 
-// Tap a photo on the strip to retake just that one.
-function stripCellAt(ev) {
-  const rect = ev.currentTarget.getBoundingClientRect();
-  const s = R.strip.width / rect.width;
-  const x = (ev.clientX - rect.left) * s, y = (ev.clientY - rect.top) * s;
-  return R.rects.findIndex((c) => x >= c.x && x <= c.x + c.w && y >= c.y && y <= c.y + c.h);
+// ---------- studio controls: tabs, swatches, sticker packs, text ----------
+function buildTabs() {
+  const tabs = [...document.querySelectorAll('.tabs [role=tab]')];
+  const select = (tab, focus) => {
+    for (const t of tabs) {
+      const on = t === tab;
+      t.setAttribute('aria-selected', on); t.tabIndex = on ? 0 : -1;
+      $(`#${t.getAttribute('aria-controls')}`).hidden = !on;
+    }
+    if (focus) tab.focus();
+    const ink = $('.tab-ink');
+    Object.assign(ink.style, { left: `${tab.offsetLeft}px`, width: `${tab.offsetWidth}px` });
+  };
+  tabs.forEach((t, i) => {
+    t.addEventListener('click', () => select(t));
+    t.addEventListener('keydown', (e) => {
+      const d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+      if (d) { e.preventDefault(); select(tabs[(i + d + tabs.length) % tabs.length], true); }
+    });
+  });
+  buildTabs.sync = () => select(tabs.find((t) => t.getAttribute('aria-selected') === 'true'));
+}
+
+function buildSwatches() {
+  const el = $('#swatches');
+  el.innerHTML = Object.entries(FRAMES).map(([id, f]) => `<button type="button" role="radio" class="sw" data-id="${id}" aria-label="${f.label}" title="${f.label}" style="--c:${f.hex}"></button>`).join('')
+    + `<label class="sw custom" title="Custom colour" style="--c:${opts.custom}"><input type="color" id="custom-color" value="${opts.custom}" aria-label="Custom frame colour"><span>Custom</span></label>`;
+  el.addEventListener('click', (e) => { const b = e.target.closest('button.sw'); if (b) setFrame(b.dataset.id); });
+  let t;
+  $('#custom-color').addEventListener('input', (e) => {
+    opts.custom = e.target.value; store.set('custom', opts.custom);
+    el.querySelector('.custom').style.setProperty('--c', opts.custom);
+    clearTimeout(t); t = setTimeout(() => setFrame('custom', true), 120);
+  });
+  syncSwatches();
+}
+function syncSwatches() {
+  for (const b of document.querySelectorAll('#swatches .sw')) {
+    const id = b.dataset.id ?? 'custom';
+    b.classList.toggle('on', id === opts.frame);
+    if (b.tagName === 'BUTTON') b.setAttribute('aria-checked', id === opts.frame);
+  }
+}
+function setFrame(id, force) {
+  if (opts.frame === id && !force) return;
+  opts.frame = id; store.set('frame', id); syncSwatches();
+  renderPreview();
+  if ($('#result').classList.contains('active')) developStrip(false);
+}
+
+async function buildPacks() {
+  const el = $('#packs');
+  el.innerHTML = Object.entries(PACKS).map(([id, p]) => `<button type="button" role="radio" class="pack" data-id="${id}" aria-checked="${opts.pack === id}"><span class="art"></span><span>${p.label}</span></button>`).join('');
+  el.addEventListener('click', (e) => { const b = e.target.closest('.pack'); if (b) setPack(b.dataset.id); });
+  for (const b of el.querySelectorAll('.pack')) {
+    if (b.dataset.id === 'none') { b.querySelector('.art').classList.add('none'); continue; }
+    packPreview(b.dataset.id, 112).then((c) => b.querySelector('.art').append(c)).catch(() => {});
+  }
+}
+function setPack(id) {
+  if (opts.pack === id) return;
+  opts.pack = id; store.set('pack', id);
+  for (const b of document.querySelectorAll('#packs .pack')) b.setAttribute('aria-checked', b.dataset.id === id);
+  $('#shuffle').hidden = id === 'none';
+  renderPreview();
+  if ($('#result').classList.contains('active')) developStrip(false);
 }
 
 // ---------- wiring ----------
@@ -625,10 +889,17 @@ function glitter() {
 function exitToHome() { leaveBooth(); show(R.photos && B.retakeOne ? 'result' : 'home'); }
 function manualSnap() {
   if (B.phase === 'start') beginPoses();
-  else if (B.phase === 'pose') startCountdown(true);
+  else if (B.phase === 'pose' || B.phase === 'timer') startCountdown(true);
+}
+function toggleMenu(open) {
+  const menu = $('#more-menu'), btn = $('#more-btn');
+  const on = open ?? menu.hidden;
+  menu.hidden = !on; btn.setAttribute('aria-expanded', on);
+  if (on) menu.querySelector('button:not([hidden])')?.focus();
 }
 
 $('#start').addEventListener('click', () => enterBooth());
+$('#upload').addEventListener('change', (e) => { fromUpload(e.target.files); e.target.value = ''; });
 $('#exit').addEventListener('click', exitToHome);
 $('#loading-back').addEventListener('click', exitToHome);
 $('#snap').addEventListener('click', manualSnap);
@@ -636,7 +907,7 @@ $('#undo').addEventListener('click', undo);
 $('#mute').addEventListener('click', (e) => {
   muted = !muted;
   e.currentTarget.setAttribute('aria-pressed', muted);
-  if (muted) stopCue(); else if (B.active && B.phase === 'pose') playCue(B.cur);
+  if (muted) stopCue(); else if (B.active && ['pose', 'timer'].includes(B.phase)) playCue(B.cur);
 });
 $('#flash-btn').setAttribute('aria-pressed', !opts.flash);
 $('#flash-btn').addEventListener('click', (e) => {
@@ -654,29 +925,44 @@ $('#fullscreen').addEventListener('click', () => {
 });
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && B.active) keepAwake(); });
 
-$('#dl-strip').addEventListener('click', async () => R.strip && downloadBlob(await stripPng(), `${fileBase()}.png`));
-$('#share-strip').hidden = !CAN_SHARE_FILES;
-$('#share-strip').addEventListener('click', async () => R.strip && shareOrDownload(await stripPng(), `${fileBase()}.png`));
+$('#dl-strip').addEventListener('click', async () => { if (!R.strip) return; downloadBlob(await stripPng(), `${fileBase()}.png`); toast('Strip saved'); });
+$('#dl-gif').addEventListener('click', makeGif);
+$('#open-video').addEventListener('click', openVideo);
+$('#close-video').addEventListener('click', closeVideo);
 $('#make-video').addEventListener('click', makeVideo);
-$('#dl-video').addEventListener('click', () => R.videoBlob && downloadBlob(R.videoBlob, `${fileBase()}.${R.videoExt}`));
+$('#redo-video').addEventListener('click', () => videoStep('setup'));
+$('#dl-video').addEventListener('click', () => { if (R.videoBlob) { downloadBlob(R.videoBlob, `${fileBase()}.${R.videoExt}`); toast('Video saved'); } });
 $('#share-video').hidden = !CAN_SHARE_FILES;
 $('#share-video').addEventListener('click', () => R.videoBlob && shareOrDownload(R.videoBlob, `${fileBase()}.${R.videoExt}`));
-$('#copy-caption').addEventListener('click', async (e) => {
-  try { await navigator.clipboard.writeText(SHARE_TEXT); e.currentTarget.textContent = 'Caption copied'; } catch { e.currentTarget.textContent = SHARE_TEXT; }
+$('#copy-caption').addEventListener('click', async () => {
+  try { await navigator.clipboard.writeText(SHARE_TEXT); toast('Caption copied'); } catch { toast(SHARE_TEXT); }
 });
+$('#more-btn').addEventListener('click', () => toggleMenu());
+$('#more-menu').addEventListener('click', () => toggleMenu(false));
+document.addEventListener('click', (e) => { if (!e.target.closest('.more-wrap')) toggleMenu(false); });
+$('#send-phone').addEventListener('click', openQr);
+$('#qr-kind').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b || b.disabled) return; qrKind = b.dataset.kind; for (const x of document.querySelectorAll('#qr-kind button')) x.setAttribute('aria-checked', x === b); });
+$('#qr-make').addEventListener('click', makeQr);
+$('#qr-again').addEventListener('click', () => qrView('pick'));
+$('#qr-copy').addEventListener('click', async () => { try { await navigator.clipboard.writeText(qrUrl); toast('Link copied'); } catch { toast(qrUrl); } });
+$('#share-strip').addEventListener('click', async () => R.strip && shareOrDownload(await stripPng(), `${fileBase()}.png`));
 $('#dl-story').addEventListener('click', storyImage);
 $('#dl-print').addEventListener('click', printSheetDownload);
-$('#strip-img').addEventListener('click', (e) => { const k = R.strip ? stripCellAt(e) : -1; if (k >= 0) enterBooth(k); });
-$('#retake-chips').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) enterBooth(+b.dataset.k); });
+$('#shuffle').addEventListener('click', () => { opts.seed++; renderPreview(); developStrip(false); });
+$('#shuffle').hidden = opts.pack === 'none';
 let noteTimer;
 $('#note').addEventListener('input', (e) => {
   clearTimeout(noteTimer);
   noteTimer = setTimeout(() => { R.note = e.target.value; store.set('note', R.note); developStrip(false); renderPreview(); }, 350);
 });
+for (const [id, key] of [['#show-date', 'showDate'], ['#show-captions', 'showCaptions']]) {
+  $(id).addEventListener('change', (e) => { opts[key] = e.target.checked; store.set(key, e.target.checked ? '1' : '0'); developStrip(false); renderPreview(); });
+}
 $('#retake').addEventListener('click', () => enterBooth());
-$('#home-btn').addEventListener('click', () => show('home'));
-addEventListener('resize', () => { if (B.active) overlay.resize(); syncChips(); });
+$('#home-btn').addEventListener('click', () => { show('home'); requestAnimationFrame(syncChips); });
+addEventListener('resize', () => { if (B.active) overlay.resize(); syncChips(); buildTabs.sync?.(); });
 addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !$('#more-menu').hidden) { toggleMenu(false); $('#more-btn').focus(); return; }
   if (!B.active || e.repeat) return;
   if (e.code === 'Space') { e.preventDefault(); manualSnap(); }
   if (e.code === 'Backspace') { e.preventDefault(); undo(); }
@@ -686,6 +972,9 @@ addEventListener('keydown', (e) => {
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 
 buildChips();
+buildTabs();
+buildSwatches();
+buildPacks();
 glitter();
 renderPreview();
 loadSong();
