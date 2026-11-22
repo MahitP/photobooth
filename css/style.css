@@ -322,3 +322,27 @@ h1 .sub { display: block; font: italic 400 clamp(20px, 2.2vw, 26px)/1.3 var(--se
 .studio, .studio > *, .tab-area, .panel { min-width: 0; }
 .save-main .btn { min-width: 0; white-space: nowrap; }
 @media (max-width: 400px) { .save-main .btn { font-size: 16px; padding: 13px 6px; } }
+
+/* ---- save box: two hero downloads, two quiet extras ---- */
+.save { gap: 12px; padding: 18px; border-radius: 22px; background: linear-gradient(180deg, #fffdf9, #fbf4ea); border-color: rgba(157,28,36,.14); box-shadow: 0 1px 0 #fff inset, 0 18px 40px -26px rgba(90,20,15,.55); }
+.save-title { margin: 0 0 -2px; font: 400 13px var(--mono); letter-spacing: .04em; color: var(--ink-soft); }
+.save-main { gap: 10px; }
+.btn.keep { display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; column-gap: 10px; align-items: center; text-align: left; padding: 13px 16px 12px; border-radius: 16px; white-space: normal;
+  background: linear-gradient(180deg, #b0222b, #8e1820); border: 1px solid #7a141b; box-shadow: 0 1px 0 rgba(255,255,255,.22) inset, 0 10px 22px -12px rgba(111,18,24,.85); transition: transform .15s var(--ease-spring), box-shadow .2s, filter .2s; }
+.btn.keep:hover { transform: translateY(-2px); filter: brightness(1.06); box-shadow: 0 1px 0 rgba(255,255,255,.22) inset, 0 16px 28px -14px rgba(111,18,24,.9); }
+.btn.keep:active { transform: translateY(0) scale(.98); }
+.btn.keep svg { grid-row: 1 / 3; width: 26px; height: 26px; fill: none; stroke: #fbf3e8; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; background: rgba(255,255,255,.14); border-radius: 10px; padding: 5px; box-sizing: content-box; }
+.btn.keep svg .fill, .btn.soft svg .fill { fill: currentColor; stroke: none; }
+.btn.keep span { font-size: 16px; line-height: 1.15; }
+.btn.keep small { font: 400 11.5px var(--mono); opacity: .78; letter-spacing: .02em; }
+.save-row.two { gap: 10px; }
+.btn.soft { display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 10px 12px; border-radius: 14px; border: 1px solid var(--line); background: rgba(255,255,255,.7); font-size: 15px; color: var(--ink); transition: background .15s, border-color .15s, transform .15s var(--ease-spring); }
+.btn.soft:hover { background: #fff; border-color: rgba(42,35,32,.32); transform: translateY(-1px); }
+.btn.soft svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; opacity: .8; }
+.btn.soft.busy { background: linear-gradient(90deg, rgba(157,28,36,.14) calc(var(--p, 0) * 100%), rgba(255,255,255,.7) 0); }
+@media (max-width: 400px) { .btn.keep { padding: 12px; column-gap: 8px; } .btn.keep span { font-size: 15px; } .btn.keep small { display: none; } }
+.btn.keep span, .btn.keep small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.btn.keep { padding: 12px 14px; }
+.btn.keep span { font-size: 21px; line-height: 1.05; font-weight: 600; }
+.btn.keep small { font-size: 11px; letter-spacing: .08em; text-transform: lowercase; opacity: .75; align-self: end; }
+@media (max-width: 400px) { .btn.keep small { display: block; } }

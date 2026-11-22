@@ -136,14 +136,15 @@
     </div>
 
     <div class="save" id="save">
+      <p class="save-title">Keep it</p>
       <div class="save-main">
-        <button id="dl-strip" class="btn primary">Download strip</button>
-        <button id="open-video" class="btn primary">Download video</button>
+        <button id="dl-strip" class="btn primary keep" aria-label="Download strip"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 19h14"/></svg><small>Download</small><span>Strip</span></button>
+        <button id="open-video" class="btn primary keep" aria-label="Download video"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="3"/><path d="M10.5 9.5v5l4-2.5z" class="fill"/></svg><small>Download</small><span>Video</span></button>
       </div>
       <div class="save-row two">
-        <button id="dl-gif" class="btn"><span>Live GIF</span></button>
+        <button id="dl-gif" class="btn soft"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M9 9.5h2.5M9 9.5v5h2.5v-2M14 9.5v5M16.5 9.5"/></svg><span>Live GIF</span></button>
         <div class="more-wrap">
-          <button id="more-btn" class="btn" aria-haspopup="menu" aria-expanded="false" aria-controls="more-menu">More</button>
+          <button id="more-btn" class="btn soft" aria-haspopup="menu" aria-expanded="false" aria-controls="more-menu"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="1.4" class="fill"/><circle cx="12" cy="12" r="1.4" class="fill"/><circle cx="18" cy="12" r="1.4" class="fill"/></svg><span>More</span></button>
           <div id="more-menu" class="menu" role="menu" hidden>
             <button role="menuitem" id="send-phone">Send to phone (QR)</button>
             <button role="menuitem" id="share-strip">Share strip</button>
