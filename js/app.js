@@ -973,6 +973,12 @@ addEventListener('keydown', (e) => {
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 
 buildChips();
+// the highlight pills are measured from button sizes, which change when the web fonts arrive (hard refresh)
+document.fonts.ready.then(() => { syncChips(); buildTabs.sync?.(); });
+if ('ResizeObserver' in window) {
+  const ro = new ResizeObserver(() => syncChips());
+  document.querySelectorAll('.chips[data-group]').forEach((el) => ro.observe(el));
+}
 buildTabs();
 buildSwatches();
 buildPacks();
