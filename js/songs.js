@@ -13,8 +13,8 @@ export const SONGS = {
     beats: [
       { pose: 'bite',     caption: 'once bitten',   lines: [{ t: 0.0, text: 'Once bitten' }] },
       { pose: 'hide',     caption: 'twice shy',     lines: [{ t: 2.25, text: 'and twice shy' }] },
-      { pose: 'distance', caption: 'i keep my distance', lines: [{ t: 4.82, text: 'I keep my distance' }] },
-      { pose: 'eye',      caption: 'you still catch my eye', lines: [{ t: 7.15, text: 'but you still catch my eye' }] },
+      { pose: 'distance', caption: 'keep my distance', lines: [{ t: 4.82, text: 'I keep my distance' }] },
+      { pose: 'eye',      caption: 'catch my eye', lines: [{ t: 7.15, text: 'but you still catch my eye' }] },
       { pose: 'point',    caption: 'do you recognize me', lines: [{ t: 10.08, text: 'Tell me, baby' }, { t: 11.63, text: 'do you recognize me?' }] },
       { pose: 'shrug',    caption: "it doesn't surprise me", lines: [{ t: 14.0, text: "Well, it's been a year" }, { t: 16.35, text: "it doesn't surprise me" }] },
     ],
