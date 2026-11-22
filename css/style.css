@@ -169,10 +169,15 @@ h1 .sub { display: block; font: italic 400 clamp(20px, 2.2vw, 26px)/1.3 var(--se
 .slot { width: min(430px, 82%); height: 30px; border-radius: 6px; background: linear-gradient(#1c1717, #050404); box-shadow: inset 0 3px 8px #000, 0 1px 0 rgba(255,255,255,.15); position: relative; z-index: 2; }
 .slot span { position: absolute; left: 6%; right: 6%; top: 12px; height: 5px; border-radius: 3px; background: #000; }
 .developing { margin-top: -14px; overflow: hidden; padding: 0 30px 40px; z-index: 1; }
-#strip-img { cursor: pointer; display: block; max-height: calc(100dvh - 120px); max-width: min(420px, 78vw); transform: translateY(-104%); box-shadow: 0 24px 50px -16px rgba(0,0,0,.75); }
-#result.printing #strip-img { animation: feed 3.4s steps(26) forwards, develop 4.8s ease-out forwards; }
+/* The print feeds out of the slot, then "develops": a cream wash fades off it. Only transform + opacity
+   animate (compositor-only), so a 2400x3600 image never has to be re-filtered every frame. */
+.sheet { position: relative; display: block; transform: translateY(-104%); will-change: transform; }
+.sheet::after { content: ""; position: absolute; inset: 0; background: #f1e9dc; opacity: 0; pointer-events: none; }
+#strip-img { cursor: pointer; display: block; max-height: calc(100dvh - 120px); max-width: min(420px, 78vw); box-shadow: 0 24px 50px -16px rgba(0,0,0,.75); }
+#result.printing .sheet { animation: feed 3.4s steps(26) forwards; }
+#result.printing .sheet::after { animation: develop 4.8s ease-out forwards; }
 @keyframes feed { to { transform: translateY(0); } }
-@keyframes develop { 0% { filter: brightness(1.7) contrast(.3) sepia(.4) blur(3px); } 60% { filter: brightness(1.12) contrast(.85) blur(0); } 100% { filter: brightness(1) contrast(1) sepia(0) blur(0); } }
+@keyframes develop { 0% { opacity: .9; } 55% { opacity: .25; } 100% { opacity: 0; } }
 
 .result-panel { padding: clamp(24px, 4vw, 56px) clamp(16px, 3vw, 40px); align-self: center; }
 .result-panel h2 { font-size: 76px; line-height: 1; margin: 0; color: var(--red); }
@@ -211,6 +216,6 @@ h1 .sub { display: block; font: italic 400 clamp(20px, 2.2vw, 26px)/1.3 var(--se
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
-  #strip-img { transform: none; }
+  .sheet { transform: none; }
   .chips .pill { transition: none; }
 }

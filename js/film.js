@@ -89,14 +89,14 @@ export function developPhoto(src, crop, w, h, film, seed = 1) {
   for (let k = 255; k >= 0; k--) { acc += hist[k]; if (acc > n * 0.005) { hi = k; break; } }
   const lvLo = lo / 255, lvGain = Math.min(1.8, 1 / Math.max(0.2, (hi - lo) / 255));
   const lv = (v) => Math.max(0, (v - lvLo) * lvGain);
-  const rand = rng(seed);
+  const G = grainTable(seed);
   const cx = w / 2, cy = h * 0.45, maxR = Math.hypot(w / 2, h / 2);
   const grainAmp = isColor(film) ? 14 : 20;
   for (let y = 0, i = 0; y < h; y++) {
     for (let x = 0; x < w; x++, i += 4) {
       const rr = Math.hypot(x - cx, y - cy) / maxR;
       const vig = 1.06 - 0.38 * smooth(Math.min(1, rr * 1.05)); // flash hot-spot + falloff
-      const g = (rand() + rand() + rand() - 1.5) * grainAmp;
+      const g = G[(x + y * 1031) & GRAIN_MASK] * grainAmp;
       let r = lv(d[i] / 255), gg = lv(d[i + 1] / 255), b = lv(d[i + 2] / 255);
       const C = COLOR[film];
       if (C) {
@@ -157,7 +157,26 @@ function sepiaTone(l) {
 }
 
 // Reusable paper texture: fibres + mottling. Seeded.
+// Grain lookup: one seeded table of approx-gaussian noise instead of three random() calls per pixel (~3x faster).
+const GRAIN_MASK = (1 << 18) - 1;
+const grainTables = new Map();
+function grainTable(seed) {
+  if (!grainTables.has(seed)) {
+    const r = rng(seed), t = new Float32Array(GRAIN_MASK + 1);
+    for (let i = 0; i <= GRAIN_MASK; i++) t[i] = r() + r() + r() - 1.5;
+    grainTables.set(seed, t);
+  }
+  return grainTables.get(seed);
+}
+
+// Paper texture is expensive (per-pixel noise + fibres) and identical for a given size, so it's built once.
+const textures = new Map();
 export function paperTexture(w, h, dark = false, seed = 7) {
+  const k = `${w}x${h}:${dark}:${seed}`;
+  if (!textures.has(k)) textures.set(k, buildPaperTexture(w, h, dark, seed));
+  return textures.get(k);
+}
+function buildPaperTexture(w, h, dark, seed) {
   const c = canvas(w, h);
   const ctx = c.getContext('2d');
   const rand = rng(seed);

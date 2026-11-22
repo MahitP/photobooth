@@ -17,7 +17,7 @@ export class Overlay {
   constructor(canvas) {
     this.c = canvas;
     this.ctx = canvas.getContext('2d');
-    this.ghost = [0, 1, 2, 3].map(() => document.createElement('canvas'));
+    this.ghost = [0, 1, 2, 3, 4].map(() => document.createElement('canvas')); // body, outline, arms, outline, composite
     this.anchor = null;
     this.sparkles = [];
   }
@@ -78,33 +78,40 @@ export class Overlay {
   }
 
   drawGhost(m, pose, matched, result) {
-    const [A, B, C, D] = this.ghost;
+    const [A, B, C, D, E] = this.ghost;
     const half = { S: m.S / 2, ox: m.ox / 2, oy: m.oy / 2 };
     const o = px(half, this.anchor);
     const u = this.anchor.fw * half.S;
-    paintGhost(A.getContext('2d'), C.getContext('2d'), o, u, pose, A.width, A.height);
-    const color = matched ? '#ffd88a' : '#ffffff';
-    outline(A, B, color);
-    outline(C, D, color);
-    // arms sit in front: hide the body outline wherever an arm covers it
-    const b = B.getContext('2d');
-    b.globalCompositeOperation = 'destination-out';
-    b.drawImage(C, 0, 0);
-    b.globalCompositeOperation = 'source-over';
-
-    const { ctx, c } = this;
     const p = result?.progress ?? 0;
-    ctx.save();
-    ctx.globalAlpha = matched ? 0.04 : 0.11 - p * 0.04;
-    ctx.drawImage(A, 0, 0, c.width, c.height);
-    ctx.globalAlpha = matched ? 0.06 : 0.16 - p * 0.05;
-    ctx.drawImage(C, 0, 0, c.width, c.height);
-    ctx.globalAlpha = matched ? 0.95 : 0.78;
-    ctx.shadowColor = matched ? 'rgba(255,190,90,0.9)' : 'rgba(0,0,0,0.3)';
-    ctx.shadowBlur = 10 * this.dpr;
-    ctx.drawImage(B, 0, 0, c.width, c.height);
-    ctx.drawImage(D, 0, 0, c.width, c.height);
-    ctx.restore();
+    // Rebuilding the cut-out is ~10 full-canvas draws plus a shadow blur, so it's cached and only redrawn
+    // when it moves by a pixel, changes pose, or changes state.
+    const key = `${Math.round(o.x)},${Math.round(o.y)},${Math.round(u)},${pose.name},${matched},${Math.round(p * 5)},${A.width}`;
+    if (key !== this.ghostKey) {
+      this.ghostKey = key;
+      paintGhost(A.getContext('2d'), C.getContext('2d'), o, u, pose, A.width, A.height);
+      const color = matched ? '#ffd88a' : '#ffffff';
+      outline(A, B, color);
+      outline(C, D, color);
+      // arms sit in front: hide the body outline wherever an arm covers it
+      const b = B.getContext('2d');
+      b.globalCompositeOperation = 'destination-out';
+      b.drawImage(C, 0, 0);
+      b.globalCompositeOperation = 'source-over';
+      const e = E.getContext('2d');
+      e.clearRect(0, 0, E.width, E.height);
+      e.save();
+      e.globalAlpha = matched ? 0.04 : 0.11 - p * 0.04;
+      e.drawImage(A, 0, 0);
+      e.globalAlpha = matched ? 0.06 : 0.16 - p * 0.05;
+      e.drawImage(C, 0, 0);
+      e.globalAlpha = matched ? 0.95 : 0.78;
+      e.shadowColor = matched ? 'rgba(255,190,90,0.9)' : 'rgba(0,0,0,0.3)';
+      e.shadowBlur = 5 * this.dpr;
+      e.drawImage(B, 0, 0);
+      e.drawImage(D, 0, 0);
+      e.restore();
+    }
+    this.ctx.drawImage(E, 0, 0, this.c.width, this.c.height);
   }
 
   drawTargets(m, targets, t) {

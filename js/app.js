@@ -1,7 +1,7 @@
 import { POSES, evaluatePose } from './poses.js';
-import { Overlay, coverMap, drawProp, ghostIcon } from './overlay.js';
+import { Overlay, coverMap, ghostIcon } from './overlay.js';
 import { FILMS, FILM_CSS, developPhoto, smartCrop, canvas } from './film.js';
-import { LAYOUTS, THEMES, renderStrip, cellRects, cellAspect, printSheet } from './strip.js';
+import { LAYOUTS, THEMES, renderStrip, cellRects, cellAspect, printSheet, warmStrip } from './strip.js';
 import { SONGS, DEFAULT_SONG, beatsFor } from './songs.js';
 import { createRenderer, exportVideo, songSegment, LYRIC_STYLES, SURFACES } from './video.js';
 
@@ -94,7 +94,7 @@ async function renderPreview() {
 }
 
 // ---------- audio ----------
-let actx = null, songBuffer = null, songEl = null, muted = false;
+let actx = null, songBuffer = null, muted = false;
 const audioCtx = () => (actx ??= new AudioContext());
 
 async function loadSong() {
@@ -102,14 +102,40 @@ async function loadSong() {
     const r = await fetch(song.src);
     if (!r.ok) throw new Error(r.status);
     songBuffer = await audioCtx().decodeAudioData(await r.arrayBuffer());
-    songEl = new Audio(song.src);
-    songEl.volume = 0.35;
-    // loop the verse section quietly while shooting
-    const a = Math.max(0, song.segment.start - 4), b = song.segment.start + song.end + 1;
-    songEl.addEventListener('timeupdate', () => { if (songEl.currentTime > b || songEl.currentTime < a - 1) songEl.currentTime = a; });
   } catch {
     songBuffer = null;
   }
+}
+
+// The song as a cue: each pose plays just its own lyric ("once bitten…"), then goes quiet while you pose.
+// The next line only plays once the photo is taken, so the song walks you through the shoot.
+let cue = null;
+function stopCue(fade = 0.12) {
+  if (!cue) return;
+  const ac = audioCtx(), now = ac.currentTime;
+  cue.gain.gain.cancelScheduledValues(now);
+  cue.gain.gain.setValueAtTime(cue.gain.gain.value, now);
+  cue.gain.gain.linearRampToValueAtTime(0, now + fade);
+  cue.src.stop(now + fade + 0.02);
+  cue = null;
+}
+function playCue(k, vol = 0.75) {
+  stopCue();
+  if (muted || !songBuffer) return;
+  const ac = audioCtx(), now = ac.currentTime;
+  const t = song.beats[k].lines[0].t;
+  const next = song.beats[k + 1]?.lines[0].t ?? song.end;
+  const lead = 0.12; // don't clip the first syllable
+  const dur = next - t + lead;
+  const src = ac.createBufferSource(), gain = ac.createGain();
+  src.buffer = songBuffer;
+  gain.gain.setValueAtTime(0, now);
+  gain.gain.linearRampToValueAtTime(vol, now + 0.06);
+  gain.gain.setValueAtTime(vol, now + dur - 0.4);
+  gain.gain.linearRampToValueAtTime(0, now + dur);
+  src.connect(gain).connect(ac.destination);
+  src.start(now, song.segment.start + t - lead, dur);
+  cue = { src, gain };
 }
 
 function noiseBurst(at, dur, freq, vol) {
@@ -175,6 +201,7 @@ async function startCamera(deviceId) {
   B.stream = await navigator.mediaDevices.getUserMedia({ video: deviceId ? { deviceId: { exact: deviceId }, ...size } : { facingMode: 'user', ...size }, audio: false });
   video.srcObject = B.stream;
   await video.play();
+  watchFrames();
   // a rear camera shouldn't be mirrored, a selfie camera should
   const s = B.stream.getVideoTracks()[0]?.getSettings() ?? {};
   B.mirrored = s.facingMode !== 'environment';
@@ -182,6 +209,13 @@ async function startCamera(deviceId) {
   B.devices = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'videoinput');
   B.devIdx = Math.max(0, B.devices.findIndex((d) => d.deviceId === s.deviceId));
   $('#flip').hidden = B.devices.length < 2;
+}
+
+const HAS_RVFC = 'requestVideoFrameCallback' in HTMLVideoElement.prototype;
+function watchFrames() {
+  if (!HAS_RVFC) return;
+  const onFrame = () => { B.newFrame = true; if (B.stream) video.requestVideoFrameCallback(onFrame); };
+  video.requestVideoFrameCallback(onFrame);
 }
 
 async function keepAwake() {
@@ -227,7 +261,6 @@ async function enterBooth(only = null) {
   if (!B.active) return;
   $('#loading').classList.add('hide');
   keepAwake();
-  if (songEl && !muted) { songEl.currentTime = Math.max(0, song.segment.start - 4); songEl.play().catch(() => {}); }
   if (retakeOne) beginPoses(); else { B.phase = 'start'; B.poseStart = performance.now(); }
   requestAnimationFrame(loop);
 }
@@ -239,7 +272,7 @@ function leaveBooth() {
   B.stream = null;
   B.wake?.release().catch(() => {});
   B.wake = null;
-  songEl?.pause();
+  stopCue();
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
 }
 
@@ -264,7 +297,8 @@ function loop() {
   // show() swaps screens inside a view transition, so the booth may still have been hidden (0×0) when entered
   if (!overlay.c.width && overlay.c.clientWidth) overlay.resize();
   if (!overlay.c.width) return;
-  if (vision && video.readyState >= 2) B.frame = vision.detect(video, B.mirrored);
+  // the camera delivers ~30 fps but the screen refreshes at 60-120 Hz: only run the models on a new frame
+  if (vision && video.readyState >= 2 && (B.newFrame || !HAS_RVFC)) { B.newFrame = false; B.frame = vision.detect(video, B.mirrored); }
   checkLight(now);
   const map = coverMap(video.videoWidth || 16, video.videoHeight || 9, overlay.c.clientWidth, overlay.c.clientHeight);
   const poseId = B.phase === 'start' ? 'frame' : B.beats[B.cur]?.pose;
@@ -280,6 +314,7 @@ function loop() {
   } else if (B.phase === 'pose') {
     trackHold(ok, now, HOLD_MS, () => startCountdown(false));
     const stuck = now - B.poseStart > 9000;
+    if (now - B.poseStart > 11000 && !B.cueAgain) { B.cueAgain = true; playCue(B.cur, 0.45); } // one gentle reminder
     setText('#hint', ok ? 'hold it…' : stuck ? 'having trouble? press space to snap' : darkHint || (result?.hint ?? ''));
   } else if (B.phase === 'countdown') {
     if (ok) B.lost = null; else B.lost ??= now;
@@ -311,8 +346,9 @@ function setPoseUI() {
 }
 
 function beginPoses() {
-  B.phase = 'pose'; B.hold = null; B.poseStart = performance.now();
+  B.phase = 'pose'; B.hold = null; B.poseStart = performance.now(); B.cueAgain = false;
   setPoseUI();
+  playCue(B.cur);
 }
 
 function startCountdown(manual) {
@@ -358,9 +394,7 @@ async function capture() {
   if (B.mirrored) { ctx.translate(vw, 0); ctx.scale(-1, 1); }
   ctx.drawImage(video, 0, 0, vw, vh);
   ctx.setTransform(1, 0, 0, 1, 0, 0);
-  const F = B.frame?.face || B.memory.face;
-  const prop = POSES[beat.pose].prop;
-  if (prop && F) drawProp(ctx, prop, F, { S: vh, ox: 0, oy: 0 }, performance.now() / 1000);
+  const F = B.frame?.face || B.memory.face; // props like the mistletoe are on-screen guides only, never in the photo
 
   // focus box (px): every face incl. hair + every hand, used for smart cropping; faces alone for lyric placement
   const faces = B.frame?.faces?.length ? B.frame.faces : F ? [F] : [];
@@ -412,17 +446,18 @@ async function capture() {
 
   B.history.push(k);
   if (!B.queue.length) return finish();
+  predevelop(k);
   B.cur = B.queue.shift();
   beginPoses();
 }
 
 // ---------- result ----------
 const R = { photos: null, beats: null, end: 0, layout: '2x3', strip: null, stripBlob: null, rects: null, faces: null, stripUrl: null,
-  videoUrl: null, videoBlob: null, videoExt: 'mp4', rendering: false, token: 0, dev: null, note: store.get('note', '') };
+  videoUrl: null, videoBlob: null, videoExt: 'mp4', rendering: false, token: 0, stripBlobFor: null, note: store.get('note', '') };
 
 async function finish() {
   leaveBooth();
-  Object.assign(R, { photos: B.photos, beats: B.beats, end: B.end, layout: B.layout, dev: null });
+  Object.assign(R, { photos: B.photos, beats: B.beats, end: B.end, layout: B.layout });
   show('result');
   syncChips(); // chips were hidden while the booth ran, so place their highlight now
   $('#video-box').hidden = true;
@@ -436,37 +471,59 @@ async function finish() {
   await developStrip(true);
 }
 
-// (Re)builds the strip from the raw shots. Film changes re-develop the photos; frame / note changes reuse them.
+// One photo, developed for a film at print size. Cached on the photo, so restyling back and forth is instant.
+function developOne(p, k, layout, film) {
+  p.dev ??= {};
+  if (p.dev[film]) return p.dev[film];
+  const rect = cellRects(layout, DPI)[k];
+  const crop = smartCrop(p.raw.width, p.raw.height, p.focus, cellAspect(layout));
+  const img = developPhoto(p.raw, crop, rect.w, rect.h, film, 101 + k);
+  const face = p.face && { x0: (p.face.x0 - crop.x) / crop.w, x1: (p.face.x1 - crop.x) / crop.w, y0: (p.face.y0 - crop.y) / crop.h, y1: (p.face.y1 - crop.y) / crop.h };
+  return (p.dev[film] = { img, face });
+}
+
+// Develop each shot while the next pose is being set up, so the strip is nearly ready the moment the last photo lands.
+const idle = (fn) => ('requestIdleCallback' in window ? requestIdleCallback(fn, { timeout: 2500 }) : setTimeout(fn, 400));
+function predevelop(k) {
+  const p = B.photos[k], layout = B.layout, film = opts.film;
+  idle(() => { if (B.photos[k] === p) developOne(p, k, layout, film); });
+  if (k === 0) idle(() => warmStrip(layout, opts.theme, DPI)); // paper texture, built once
+}
+
+// (Re)builds the strip from the developed shots. Only shots not developed yet are processed here.
 async function developStrip(animate) {
   const token = ++R.token;
   await fontsReady();
   const rects = cellRects(R.layout, DPI);
-  if (!R.dev || R.dev.film !== opts.film) {
-    const aspect = cellAspect(R.layout);
-    const out = [];
-    for (let i = 0; i < R.photos.length; i++) {
-      const p = R.photos[i];
-      const crop = smartCrop(p.raw.width, p.raw.height, p.focus, aspect);
-      const img = developPhoto(p.raw, crop, rects[i].w, rects[i].h, opts.film, 101 + i);
-      const face = p.face && { x0: (p.face.x0 - crop.x) / crop.w, x1: (p.face.x1 - crop.x) / crop.w, y0: (p.face.y0 - crop.y) / crop.h, y1: (p.face.y1 - crop.y) / crop.h };
-      out.push({ img, face });
-      if (!animate) await wait(0); // keep the UI responsive while restyling
-      if (token !== R.token) return;
-    }
-    R.dev = { film: opts.film, imgs: out.map((d) => d.img), faces: out.map((d) => d.face) };
+  const devs = [];
+  for (let k = 0; k < R.photos.length; k++) {
+    const cached = R.photos[k].dev?.[opts.film];
+    devs.push(cached || developOne(R.photos[k], k, R.layout, opts.film));
+    if (!cached) { await wait(0); if (token !== R.token) return; } // let frames through between photos
   }
-  const strip = renderStrip({ layoutId: R.layout, themeId: opts.theme, photos: R.dev.imgs, captions: R.photos.map((p) => p.caption), note: R.note, dpi: DPI });
-  const blob = await new Promise((r) => strip.toBlob(r, 'image/png'));
+  const strip = renderStrip({ layoutId: R.layout, themeId: opts.theme, photos: devs.map((d) => d.img), captions: R.photos.map((p) => p.caption), note: R.note, dpi: DPI });
+  // JPEG for the on-screen preview (fast to encode); the lossless PNG for download is made in the background.
+  const preview = await new Promise((r) => strip.toBlob(r, 'image/jpeg', 0.92));
   if (token !== R.token) return;
-  Object.assign(R, { strip, stripBlob: blob, rects, faces: R.dev.faces });
+  Object.assign(R, { strip, stripBlob: null, rects, faces: devs.map((d) => d.face) });
   if (R.stripUrl) URL.revokeObjectURL(R.stripUrl);
-  R.stripUrl = URL.createObjectURL(blob);
+  R.stripUrl = URL.createObjectURL(preview);
   const img = $('#strip-img');
   img.src = R.stripUrl;
   await img.decode().catch(() => {});
   const res = $('#result');
   if (animate) { res.classList.remove('printing'); void res.offsetWidth; res.classList.add('printing'); }
   markVideoStale();
+  idle(() => stripPng());
+}
+
+// Lossless PNG of the current strip, made once per version of the strip.
+async function stripPng() {
+  const strip = R.strip;
+  if (R.stripBlob && R.stripBlobFor === strip) return R.stripBlob;
+  const blob = await new Promise((r) => strip.toBlob(r, 'image/png'));
+  if (R.strip === strip) Object.assign(R, { stripBlob: blob, stripBlobFor: strip });
+  return blob;
 }
 
 function clearVideo() {
@@ -579,7 +636,7 @@ $('#undo').addEventListener('click', undo);
 $('#mute').addEventListener('click', (e) => {
   muted = !muted;
   e.currentTarget.setAttribute('aria-pressed', muted);
-  if (songEl) { if (muted) songEl.pause(); else if (B.active) songEl.play().catch(() => {}); }
+  if (muted) stopCue(); else if (B.active && B.phase === 'pose') playCue(B.cur);
 });
 $('#flash-btn').setAttribute('aria-pressed', !opts.flash);
 $('#flash-btn').addEventListener('click', (e) => {
@@ -597,9 +654,9 @@ $('#fullscreen').addEventListener('click', () => {
 });
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && B.active) keepAwake(); });
 
-$('#dl-strip').addEventListener('click', () => R.stripBlob && downloadBlob(R.stripBlob, `${fileBase()}.png`));
+$('#dl-strip').addEventListener('click', async () => R.strip && downloadBlob(await stripPng(), `${fileBase()}.png`));
 $('#share-strip').hidden = !CAN_SHARE_FILES;
-$('#share-strip').addEventListener('click', () => R.stripBlob && shareOrDownload(R.stripBlob, `${fileBase()}.png`));
+$('#share-strip').addEventListener('click', async () => R.strip && shareOrDownload(await stripPng(), `${fileBase()}.png`));
 $('#make-video').addEventListener('click', makeVideo);
 $('#dl-video').addEventListener('click', () => R.videoBlob && downloadBlob(R.videoBlob, `${fileBase()}.${R.videoExt}`));
 $('#share-video').hidden = !CAN_SHARE_FILES;

@@ -38,8 +38,9 @@ export class Vision {
 
     const h = this.hands.detectForVideo(video, ts);
     const f = this.face.detectForVideo(video, ts);
-    // Body is only a fallback for the face, so every 3rd frame is plenty.
-    if (this.frameNo++ % 3 === 0) {
+    // Body is only a fallback for when the face can't be seen (e.g. hidden behind hands), so it only runs then,
+    // every 3rd frame. Skipping it the rest of the time saves a whole model per frame.
+    if (!f.faceLandmarks?.length && this.frameNo++ % 3 === 0) {
       const b = this.body.detectForVideo(video, ts);
       this.bodyPts = b.landmarks?.[0] ? conv(b.landmarks[0]) : null;
     }

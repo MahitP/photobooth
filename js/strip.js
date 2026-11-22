@@ -211,3 +211,9 @@ export function printSheet(strip) {
   ctx.beginPath(); ctx.moveTo(strip.width, 0); ctx.lineTo(strip.width, t); ctx.moveTo(strip.width, strip.height - t); ctx.lineTo(strip.width, strip.height); ctx.stroke();
   return c;
 }
+
+// Builds the (cached) paper texture for a layout ahead of time, so the first strip render doesn't pay for it.
+export function warmStrip(layoutId, themeId, dpi) {
+  const L = LAYOUTS[layoutId];
+  paperTexture(Math.round(Math.round(L.w * dpi) / 2), Math.round(Math.round(L.h * dpi) / 2), THEMES[themeId].dark, 3 + 11);
+}
