@@ -6,6 +6,14 @@
   <title>Hold it. · Last Christmas</title>
   <meta name="description" content="Hold it. A photobooth that takes the picture when you hold the pose. Last Christmas edition.">
   <meta name="theme-color" content="#f3ece1">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://photobooth.mahit.dev/">
+  <meta property="og:title" content="Hold it. · Last Christmas photobooth">
+  <meta property="og:description" content="Strike each pose on the lyric and the camera fires on its own. Keep the strip, a live GIF and a video set to the song.">
+  <meta property="og:image" content="https://photobooth.mahit.dev/assets/og.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="assets/icon-180.png">
@@ -45,8 +53,8 @@
     </fieldset>
 
     <div class="cta">
-      <button id="start" class="btn primary big">Step into the booth</button>
-      <label class="link upload">or use photos from your camera roll<input type="file" id="upload" accept="image/*" multiple></label>
+      <button id="start" class="btn primary big with-ic"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 8.5A2.5 2.5 0 0 1 6 6h1.6l1.5-2.2h5.8L16.4 6H18a2.5 2.5 0 0 1 2.5 2.5v8.5A2.5 2.5 0 0 1 18 19.5H6a2.5 2.5 0 0 1-2.5-2.5z"/><circle cx="12" cy="12.6" r="3.6"/></svg><span>Step into the booth</span></button>
+      <label class="link upload"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="m20.5 15.5-4.4-4.4a1.5 1.5 0 0 0-2.1 0L5.5 19.5"/></svg><span>or use photos from your camera roll</span><input type="file" id="upload" accept="image/*" multiple></label>
       <p class="fine">Everything stays on your device, unless you choose to send it to your phone.</p>
     </div>
   </section>
@@ -62,19 +70,15 @@
   <div class="booth-top">
     <p class="wordmark">last christmas</p>
     <div class="booth-btns">
-      <button id="flash-btn" class="icon-btn" aria-label="Screen flash" aria-pressed="false" title="Screen flash lights your face for each shot">
-        <svg viewBox="0 0 24 24"><path d="M13 2 5 14h6l-1 8 8-12h-6z"/><path class="slash" d="M4 4l16 16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      <button id="flash-btn" class="icon-btn" aria-label="Screen flash" aria-pressed="false" title="Screen flash lights your face for each shot"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M13.2 2.8 5.6 13.1a.6.6 0 0 0 .5 1h5.2l-1.1 7.1 7.7-10.4a.6.6 0 0 0-.5-1h-5.2z"/><path class="slash" d="M3.5 3.5l17 17"/></svg>
       </button>
-      <button id="flip" class="icon-btn" aria-label="Switch camera" hidden>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-2h6l2 2h3v11H4z"/><path d="M9.5 13.5a2.8 2.8 0 0 1 5-1.6M14.5 12.5v-1.8h-1.8M14.5 14.5a2.8 2.8 0 0 1-5 1.6M9.5 15.5v1.8h1.8"/></svg>
+      <button id="flip" class="icon-btn" aria-label="Switch camera" hidden><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8.5A2.5 2.5 0 0 1 6.5 6h1.8l1.4-2h4.6l1.4 2h1.8A2.5 2.5 0 0 1 20 8.5v8a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5z"/><path d="M15 11.2a3.2 3.2 0 0 0-5.6-1.4M9 13.8a3.2 3.2 0 0 0 5.6 1.4"/><path d="M15.2 8.9v2.4h-2.4M8.8 16.1v-2.4h2.4"/></svg>
       </button>
-      <button id="fullscreen" class="icon-btn" aria-label="Full screen">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+      <button id="fullscreen" class="icon-btn" aria-label="Full screen"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V6a2 2 0 0 1 2-2h3M15 4h3a2 2 0 0 1 2 2v3M20 15v3a2 2 0 0 1-2 2h-3M9 20H6a2 2 0 0 1-2-2v-3"/></svg>
       </button>
-      <button id="mute" class="icon-btn" aria-label="Mute music" aria-pressed="false">
-        <svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path class="wave" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      <button id="mute" class="icon-btn" aria-label="Mute music" aria-pressed="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6.5 8.5H4a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1h2.5L11 19z"/><path class="wave" d="M15.5 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11"/><path class="slash" d="M16 9.5l5 5M21 9.5l-5 5"/></svg>
       </button>
-      <button id="exit" class="icon-btn" aria-label="Leave the booth"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
+      <button id="exit" class="icon-btn" aria-label="Leave the booth"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg></button>
     </div>
   </div>
 
@@ -138,13 +142,13 @@
     <div class="save" id="save">
       <p class="save-title">Keep it</p>
       <div class="save-main">
-        <button id="dl-strip" class="btn primary keep" aria-label="Download strip"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 19h14"/></svg><small>Download</small><span>Strip</span></button>
-        <button id="open-video" class="btn primary keep" aria-label="Download video"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="3"/><path d="M10.5 9.5v5l4-2.5z" class="fill"/></svg><small>Download</small><span>Video</span></button>
+        <button id="dl-strip" class="btn primary keep" aria-label="Download strip"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="1.6"/><rect x="9" y="4.6" width="6" height="4" rx=".6"/><rect x="9" y="10" width="6" height="4" rx=".6"/><path d="M9 17.4h6M10.5 19.3h3"/></svg><small>Download</small><span>Strip</span></button>
+        <button id="open-video" class="btn primary keep" aria-label="Download video"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10.5h16v7.5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><path d="M4 10.5 3.4 8a1.8 1.8 0 0 1 1.3-2.2l11.8-3a1.8 1.8 0 0 1 2.2 1.3l.6 2.4z"/><path d="M7.6 5l2.4 3.6M12.6 3.8 15 7.3"/></svg><small>Download</small><span>Video</span></button>
       </div>
       <div class="save-row two">
-        <button id="dl-gif" class="btn soft"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M9 9.5h2.5M9 9.5v5h2.5v-2M14 9.5v5M16.5 9.5"/></svg><span>Live GIF</span></button>
+        <button id="dl-gif" class="btn soft"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 3.5c.5 3.6 2 5.1 5.6 5.6-3.6.5-5.1 2-5.6 5.6-.5-3.6-2-5.1-5.6-5.6C8 8.6 9.5 7.1 10 3.5z"/><path d="M17.5 13.5c.3 1.9 1.1 2.7 3 3-1.9.3-2.7 1.1-3 3-.3-1.9-1.1-2.7-3-3 1.9-.3 2.7-1.1 3-3z"/></svg><span>Live GIF</span></button>
         <div class="more-wrap">
-          <button id="more-btn" class="btn soft" aria-haspopup="menu" aria-expanded="false" aria-controls="more-menu"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="1.4" class="fill"/><circle cx="12" cy="12" r="1.4" class="fill"/><circle cx="18" cy="12" r="1.4" class="fill"/></svg><span>More</span></button>
+          <button id="more-btn" class="btn soft" aria-haspopup="menu" aria-expanded="false" aria-controls="more-menu"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5.5" cy="12" r=".9"/><circle cx="12" cy="12" r=".9"/><circle cx="18.5" cy="12" r=".9"/></svg><span>More</span></button>
           <div id="more-menu" class="menu" role="menu" hidden>
             <button role="menuitem" id="send-phone">Send to phone (QR)</button>
             <button role="menuitem" id="share-strip">Share strip</button>
