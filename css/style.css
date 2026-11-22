@@ -376,3 +376,8 @@ h1 .sub { display: block; font: italic 400 clamp(20px, 2.2vw, 26px)/1.3 var(--se
 .chips button:hover:not([aria-checked="true"]) { border-color: rgba(42,35,32,.35); }
 :where(button, [role=tab], .sw, .pack):focus-visible { outline: 2px solid var(--red); outline-offset: 3px; }
 ::selection { background: rgba(157,28,36,.18); }
+
+/* hero download icons: just the line icon, no circle */
+.btn.keep svg { width: 28px; height: 28px; padding: 0; background: none; box-shadow: none; border-radius: 0; stroke-width: 1.5; filter: drop-shadow(0 1px 1px rgba(60,0,5,.35)); }
+.btn.keep:hover svg { background: none; }
+.btn.keep { column-gap: 12px; padding-left: 18px; }
